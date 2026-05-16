@@ -36,7 +36,11 @@ class SiswaForm
 
                     Select::make('user_id')
                         ->label('User')
-                        ->relationship('user', 'name') // ambil dari user table
+                        ->relationship(
+                            name: 'user',
+                            titleAttribute: 'name',
+                            modifyQueryUsing: fn($query) => $query->where('role', 'siswa')
+                        )
                         ->required()
                         ->searchable()
                         ->helperText('Pilih akun user yang terkait dengan siswa'),
@@ -93,7 +97,8 @@ class SiswaForm
                         ->label('Aktif')
                         ->default(true)
                         ->helperText('Matikan jika siswa tidak aktif lagi'),
-                ]),
+                ])
+                    ->columnSpanFull(),
             ]);
     }
 }

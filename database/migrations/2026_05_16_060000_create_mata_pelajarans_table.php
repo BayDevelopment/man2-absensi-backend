@@ -11,12 +11,10 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('kelas', function (Blueprint $table) {
+        Schema::create('mata_pelajarans', function (Blueprint $table) {
             $table->id();
-            $table->string('nama_kelas');        // X IPA 1, XI IPS 2
-            $table->string('tingkat');           // X, XI, XII
-            $table->string('jurusan')->nullable(); // IPA, IPS, dll
-            $table->foreignId('wali_kelas_id')->nullable()->constrained('users');
+            $table->string('nama');          // Matematika, Fisika, dst
+            $table->string('kode')->nullable(); // MTK, FIS, dst
             $table->timestamps();
         });
     }
@@ -26,6 +24,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('kelas');
+        Schema::dropIfExists('mata_pelajarans');
     }
 };

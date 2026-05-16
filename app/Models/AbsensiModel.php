@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class AbsensiModel extends Model
 {
@@ -34,6 +35,12 @@ class AbsensiModel extends Model
     {
         return $this->belongsTo(SiswaModel::class);
     }
+    // app/Models/AbsensiModel.php — tambahkan relasi ini kalau belum ada
+    public function jadwal(): BelongsTo
+    {
+        return $this->belongsTo(JadwalModel::class, 'jadwal_id');
+    }
+
 
     /**
      * Relasi: absensi milik satu kelas (opsional)
