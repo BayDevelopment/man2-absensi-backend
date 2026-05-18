@@ -1,20 +1,20 @@
 <?php
 
-namespace App\Filament\Resources\Absensis\Pages;
+namespace App\Filament\Resources\Gurus\Pages;
 
-use App\Filament\Resources\Absensis\AbsensiResource;
+use App\Filament\Resources\Gurus\GuruResource;
 use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
 
-class ListAbsensis extends ListRecords
+class ListGurus extends ListRecords
 {
-    protected static string $resource = AbsensiResource::class;
+    protected static string $resource = GuruResource::class;
 
     protected function getHeaderActions(): array
     {
         return [
             CreateAction::make()
-                ->label('Absensi')
+                ->label('Guru')
                 ->icon('heroicon-o-plus'),
         ];
     }

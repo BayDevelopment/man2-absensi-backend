@@ -1,31 +1,37 @@
 <?php
 
-namespace App\Filament\Resources\Mapels\Pages;
+namespace App\Filament\Resources\Gurus\Pages;
 
-use App\Filament\Resources\Mapels\MapelResource;
+use App\Filament\Resources\Gurus\GuruResource;
 use Filament\Actions\Action;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\ForceDeleteAction;
+use Filament\Actions\RestoreAction;
 use Filament\Notifications\Notification;
-use Filament\Resources\Pages\CreateRecord;
+use Filament\Resources\Pages\EditRecord;
 
-class CreateMapel extends CreateRecord
+class EditGuru extends EditRecord
 {
-    protected static string $resource = MapelResource::class;
+    protected static string $resource = GuruResource::class;
 
     protected function getRedirectUrl(): string
     {
         return $this->getResource()::getUrl('index');
     }
-
-    protected function getCreatedNotification(): ?Notification
+    protected function getSavedNotification(): ?Notification
     {
         return Notification::make()
-            ->title('Berhasil')
-            ->body('Mata Pelajaran berhasil ditambahkan.')
+            ->title('Berhasil Diupdate')
+            ->body('Data Guru berhasil diperbarui.')
             ->success();
     }
     protected function getHeaderActions(): array
     {
         return [
+            // ViewAction::make(),
+            // DeleteAction::make(),
+            ForceDeleteAction::make(),
+            RestoreAction::make(),
             Action::make('back')
                 ->label('Kembali')
                 ->icon('heroicon-o-arrow-left')
@@ -37,21 +43,18 @@ class CreateMapel extends CreateRecord
     protected function getFormActions(): array
     {
         return [
-            $this->getCreateFormAction()
-                ->label('Create')
+
+            $this->getSaveFormAction()
+                ->label('Save Changes')
                 ->icon('heroicon-o-check-circle')
                 ->color('primary'),
 
-            $this->getCreateAnotherFormAction()
-                ->label('Create & Create Another')
-                ->icon('heroicon-o-plus-circle')
-                ->color('success'),
-
             $this->getCancelFormAction()
                 ->label('Cancel')
-                ->url($this->getResource()::getUrl('index'))
                 ->icon('heroicon-o-x-mark')
-                ->color('gray'),
+                ->color('gray')
+                ->url(static::getResource()::getUrl('index')),
+
         ];
     }
 }

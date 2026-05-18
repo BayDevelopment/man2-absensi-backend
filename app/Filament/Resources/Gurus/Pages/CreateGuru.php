@@ -1,15 +1,15 @@
 <?php
 
-namespace App\Filament\Resources\Mapels\Pages;
+namespace App\Filament\Resources\Gurus\Pages;
 
-use App\Filament\Resources\Mapels\MapelResource;
+use App\Filament\Resources\Gurus\GuruResource;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\CreateRecord;
 
-class CreateMapel extends CreateRecord
+class CreateGuru extends CreateRecord
 {
-    protected static string $resource = MapelResource::class;
+    protected static string $resource = GuruResource::class;
 
     protected function getRedirectUrl(): string
     {
@@ -20,7 +20,7 @@ class CreateMapel extends CreateRecord
     {
         return Notification::make()
             ->title('Berhasil')
-            ->body('Mata Pelajaran berhasil ditambahkan.')
+            ->body('Data Guru berhasil ditambahkan.')
             ->success();
     }
     protected function getHeaderActions(): array
