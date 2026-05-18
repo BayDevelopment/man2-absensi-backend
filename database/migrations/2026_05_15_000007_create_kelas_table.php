@@ -13,11 +13,23 @@ return new class extends Migration
     {
         Schema::create('kelas', function (Blueprint $table) {
             $table->id();
-            $table->string('nama_kelas');        // X IPA 1, XI IPS 2
-            $table->string('tingkat');           // X, XI, XII
-            $table->string('jurusan')->nullable(); // IPA, IPS, dll
-            $table->foreignId('wali_kelas_id')->nullable()->constrained('gurus')->nullOnDelete();
-            $table->foreignId('tahun_ajaran_id')->nullable()->constrained('tahun_ajarans')->nullOnDelete();
+            $table->string('nama_kelas');
+            $table->enum('tingkat', ['X', 'XI', 'XII']);
+            $table->enum('jurusan', [
+                'Tahfiz',
+                'Olimpiade',
+                'Olahraga & Seni',
+                'Multimedia',
+                'Linguistik',
+            ])->nullable();
+            $table->foreignId('wali_kelas_id')
+                ->nullable()
+                ->constrained('gurus')
+                ->nullOnDelete();
+            $table->foreignId('tahun_ajaran_id')
+                ->nullable()
+                ->constrained('tahun_ajarans')
+                ->nullOnDelete();
             $table->timestamps();
         });
     }

@@ -1,83 +1,68 @@
 <?php
 
-namespace App\Exports;
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
 
-use App\Models\Absensi;
-use App\Models\AbsensiModel;
-use Maatwebsite\Excel\Concerns\FromCollection;
-use Maatwebsite\Excel\Concerns\WithHeadings;
-
-class AbsensiExport implements FromCollection, WithHeadings
+return new class extends Migration
 {
-    protected $records;
-
-    /**
-     * Terima data absensi (opsional)
-     * Jika null, akan ambil semua data
-     */
-    public function __construct($records = null)
+    public function up(): void
     {
-        $this->records = $records ?? AbsensiModel::with([
-            'siswa.user',
-            'kelas',
-            'jadwal',
-            'tahunAjaran',
-            'semester',
-            'dicatatOleh'
-        ])->get();
-    }
+        Schema::create('absensi', function (Blueprint $table) {
+            $table->id();
 
-    /**
-     * Collection data untuk Excel
-     */
-    public function collection()
-    {
-        return collect($this->records)->map(function ($item) {
-            return [
-                'ID' => $item->id,
-                'Nama Siswa' => $item->siswa->user->nama_lengkap ?? '-',
-                'Kelas' => $item->kelas->nama ?? '-',
-                'Jadwal' => $item->jadwal->nama ?? '-',
-                'Tahun Ajaran' => $item->tahunAjaran->nama ?? '-',
-                'Semester' => $item->semester->nama ?? '-',
-                'Tanggal' => $item->tanggal,
-                'Jam Masuk' => $item->jam_masuk,
-                'Jam Keluar' => $item->jam_keluar,
-                'Status' => ucfirst($item->status),
-                'Keterangan' => $item->keterangan,
-                'Dokumen Pendukung' => $item->dokumen_pendukung_path ?? '-',
-                'Verified by Face' => $item->verified_by_face ? 'Ya' : 'Tidak',
-                'Face Confidence' => $item->face_confidence ?? '-',
-                'Dicatat Oleh' => $item->dicatatOleh->nama_lengkap ?? '-',
-                'Dibuat' => $item->created_at,
-                'Diperbarui' => $item->updated_at,
-            ];
+            // ── Relasi ─────────────────────────────────────────────────────────
+            $table->foreignId('siswa_id')
+                ->constrained('siswas')
+                ->cascadeOnDelete();
+
+            $table->foreignId('kelas_id')
+                ->nullable()
+                ->constrained('kelas')
+                ->nullOnDelete();
+
+            $table->foreignId('jadwal_id')
+                ->nullable()
+                ->constrained('jadwals')
+                ->nullOnDelete();
+
+            // ── Waktu Kehadiran ────────────────────────────────────────────────
+            $table->date('tanggal');
+            $table->time('jam_masuk')->nullable();
+            $table->time('jam_keluar')->nullable();
+
+            // ── Status Kehadiran ───────────────────────────────────────────────
+            $table->enum('status', ['hadir', 'terlambat', 'izin', 'sakit', 'alfa'])
+                ->default('hadir');
+            $table->text('keterangan')->nullable();
+            $table->string('dokumen_pendukung_path')->nullable(); // bukti izin/sakit
+
+            // ── Face Recognition ───────────────────────────────────────────────
+            $table->boolean('verified_by_face')->default(false);
+            $table->float('face_confidence', 5, 4)->nullable(); // contoh: 0.9875
+            $table->string('face_image_path')->nullable();
+            $table->timestamp('face_verified_at')->nullable();
+
+            // ── Audit ──────────────────────────────────────────────────────────
+            $table->foreignId('dicatat_oleh')
+                ->nullable()
+                ->constrained('users')
+                ->nullOnDelete();
+
+            $table->timestamps();
+
+            // ── Index ──────────────────────────────────────────────────────────
+            $table->index('siswa_id');
+            $table->index('kelas_id');
+            $table->index('jadwal_id');
+            $table->index('tanggal');
+            $table->index('status');
+            $table->index(['siswa_id', 'tanggal']); // query paling sering: absensi siswa per hari
         });
     }
 
-    /**
-     * Headings kolom di Excel
-     */
-    public function headings(): array
+    public function down(): void
     {
-        return [
-            'ID',
-            'Nama Siswa',
-            'Kelas',
-            'Jadwal',
-            'Tahun Ajaran',
-            'Semester',
-            'Tanggal',
-            'Jam Masuk',
-            'Jam Keluar',
-            'Status',
-            'Keterangan',
-            'Dokumen Pendukung',
-            'Verified by Face',
-            'Face Confidence',
-            'Dicatat Oleh',
-            'Dibuat',
-            'Diperbarui',
-        ];
+        Schema::dropIfExists('absensi');
     }
-}
+};
