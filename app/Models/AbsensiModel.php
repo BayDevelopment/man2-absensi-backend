@@ -15,42 +15,47 @@ class AbsensiModel extends Model
     protected $fillable = [
         'siswa_id',
         'kelas_id',
+        'jadwal_id',
+
         'tanggal',
         'jam_masuk',
+        'jam_keluar',
+
         'status',
         'keterangan',
+        'dokumen_pendukung_path',
+
         'verified_by_face',
         'face_confidence',
+        'face_image_path',
+        'face_verified_at',
+
         'dicatat_oleh',
     ];
 
     protected $casts = [
         'tanggal' => 'date',
-        'jam_masuk' => 'time',
         'verified_by_face' => 'boolean',
         'face_confidence' => 'float',
+        'face_verified_at' => 'datetime',
     ];
 
-    public function siswa()
+    public function siswa(): BelongsTo
     {
-        return $this->belongsTo(SiswaModel::class);
+        return $this->belongsTo(SiswaModel::class, 'siswa_id');
     }
-    // app/Models/AbsensiModel.php — tambahkan relasi ini kalau belum ada
+
+    public function kelas(): BelongsTo
+    {
+        return $this->belongsTo(KelasModel::class, 'kelas_id');
+    }
+
     public function jadwal(): BelongsTo
     {
         return $this->belongsTo(JadwalModel::class, 'jadwal_id');
     }
 
-
-    /**
-     * Relasi: absensi milik satu kelas (opsional)
-     */
-    public function kelas()
-    {
-        return $this->belongsTo(KelasModel::class);
-    }
-
-    public function pencatat()
+    public function pencatat(): BelongsTo
     {
         return $this->belongsTo(User::class, 'dicatat_oleh');
     }

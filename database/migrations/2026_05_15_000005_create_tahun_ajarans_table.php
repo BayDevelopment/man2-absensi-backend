@@ -11,13 +11,12 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('gurus', function (Blueprint $table) {
+        Schema::create('tahun_ajarans', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('user_id')->constrained()->onDelete('cascade');
-            $table->string('nip')->unique()->nullable();
-            $table->string('nama_lengkap');
-            $table->string('no_hp')->nullable();
-            $table->string('foto')->nullable();
+            $table->string('nama'); // 2025/2026
+            $table->date('tanggal_mulai');
+            $table->date('tanggal_selesai');
+            $table->boolean('is_active')->default(false);
             $table->timestamps();
         });
     }
@@ -27,6 +26,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('gurus');
+        Schema::dropIfExists('tahun_ajarans');
     }
 };

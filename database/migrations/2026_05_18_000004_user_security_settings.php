@@ -11,10 +11,12 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('table_pengumumans', function (Blueprint $table) {
+        Schema::create('user_security_settings', function (Blueprint $table) {
             $table->id();
-            $table->string('judul');
-            $table->text('isi');
+            $table->foreignId('user_id')->constrained()->cascadeOnDelete();
+            $table->boolean('two_factor')->default(false);
+            $table->boolean('notif_login')->default(true);
+            $table->boolean('logout_otomatis')->default(false);
             $table->timestamps();
         });
     }
@@ -24,6 +26,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('table_pengumumans');
+        Schema::dropIfExists('user_security_settings');
     }
 };

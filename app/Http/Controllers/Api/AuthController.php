@@ -13,44 +13,54 @@ class AuthController extends Controller
     public function login(Request $request)
     {
         $request->validate([
-            'email'    => 'required|string',   // 'email' dipakai sebagai field name dari Vue
+            'email'    => 'required|string',
             'password' => 'required|string',
         ]);
 
-        $nisn = $request->email; // Vue mengirim NISN di field 'email'
+        // Cari langsung di tabel users berdasarkan NISN
+        $user = \App\Models\User::where('nisn', $request->email)->first();
 
-        // Cari siswa berdasarkan NISN
-        $siswa = SiswaModel::where('nisn', $nisn)->where('is_active', true)->first();
-
-        if (!$siswa) {
+        if (!$user) {
             return response()->json([
                 'success' => false,
-                'message' => 'NISN tidak ditemukan',  // ← Vue baca ini untuk error NISN
+                'message' => 'NISN tidak terdaftar dalam sistem',
             ], 401);
         }
 
-        // Ambil user yang terhubung ke siswa
-        $user = $siswa->user;
-
-        if (!$user || !Hash::check($request->password, $user->password)) {
+        // Cek role harus siswa
+        if ($user->role !== 'siswa') {
             return response()->json([
                 'success' => false,
-                'message' => 'Password salah',  // ← Vue baca ini untuk error password
+                'message' => 'Akses ditolak',
+            ], 403);
+        }
+
+        // Cek password
+        if (!Hash::check($request->password, $user->password)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Password salah',
             ], 401);
         }
 
-        // Login berhasil — return data (Sanctum cookie di-set otomatis)
-        Auth::login($user, $request->boolean('remember'));
+        if (!$user->hasVerifiedEmail()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Email belum diverifikasi, silakan cek inbox atau spam',
+            ], 403);
+        }
+
+        // Buat token
+        $token = $user->createToken('auth_token')->plainTextToken;
 
         return response()->json([
             'success' => true,
+            'token'   => $token,
             'user'    => [
                 'id'    => $user->id,
-                'name'  => $siswa->nama_lengkap,
-                'nisn'  => $siswa->nisn,
-                'kelas' => $siswa->kelas?->nama ?? '-',
-                'foto'  => $siswa->foto,
-                'roles' => $user->getRoleNames(),
+                'name'  => $user->name,
+                'nisn'  => $user->nisn,
+                'roles' => [$user->role],
             ],
         ]);
     }
@@ -58,36 +68,28 @@ class AuthController extends Controller
     /**
      * POST /api/logout
      */
-    public function logout(Request $request)
-    {
-        Auth::guard('web')->logout();
-        $request->session()->invalidate();
-        $request->session()->regenerateToken();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Berhasil logout',
-        ]);
-    }
-
-    /**
-     * GET /api/me — cek session masih valid
-     */
     public function me(Request $request)
     {
-        $user  = $request->user();
-        $siswa = $user->siswa; // relasi user → siswa
+        $user = $request->user();
 
         return response()->json([
             'success' => true,
             'user'    => [
                 'id'    => $user->id,
-                'name'  => $siswa?->nama_lengkap ?? $user->name,
-                'nisn'  => $siswa?->nisn,
-                'kelas' => $siswa?->kelas?->nama ?? '-',
-                'foto'  => $siswa?->foto,
-                'roles' => $user->getRoleNames(),
+                'name'  => $user->name,
+                'nisn'  => $user->nisn,
+                'roles' => [$user->role],
             ],
+        ]);
+    }
+
+    public function logout(Request $request)
+    {
+        $request->user()->currentAccessToken()->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Berhasil logout',
         ]);
     }
 }

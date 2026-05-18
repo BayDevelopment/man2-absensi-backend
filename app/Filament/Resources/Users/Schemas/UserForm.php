@@ -7,8 +7,11 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Password;
 
 class UserForm
 {
@@ -21,9 +24,19 @@ class UserForm
                         TextInput::make('name')
                             ->label('Username')
                             ->required()
-                            ->maxLength(255)
+                            ->minLength(3)
+                            ->maxLength(50)
                             ->regex('/^[A-Za-z0-9]+$/')
-                            ->helperText('Username hanya boleh berisi huruf besar, huruf kecil, dan angka tanpa spasi'),
+                            ->unique(ignoreRecord: true)
+                            ->dehydrateStateUsing(fn(?string $state) => trim($state))
+                            ->validationMessages([
+                                'required' => 'Username wajib diisi.',
+                                'min' => 'Username minimal 3 karakter.',
+                                'max' => 'Username maksimal 50 karakter.',
+                                'regex' => 'Username hanya boleh berisi huruf dan angka tanpa spasi atau simbol.',
+                                'unique' => 'Username sudah digunakan.',
+                            ])
+                            ->helperText('Username hanya boleh berisi huruf besar, huruf kecil, dan angka tanpa spasi.'),
 
                         Select::make('role')
                             ->label('Role')
@@ -34,25 +47,49 @@ class UserForm
                             ])
                             ->required()
                             ->default('siswa')
-                            ->helperText('Pilih role user'),
+                            ->native(false)
+                            ->rules([
+                                Rule::in(['admin', 'guru', 'siswa']),
+                            ])
+                            ->live()
+                            ->validationMessages([
+                                'required' => 'Role wajib dipilih.',
+                                'in' => 'Role tidak valid.',
+                            ])
+                            ->helperText('Pilih role user.'),
                     ]),
 
                     Grid::make(2)->schema([
                         TextInput::make('email')
                             ->label('Email')
                             ->email()
-                            ->unique(ignoreRecord: true)
-                            ->nullable()
+                            ->required()
                             ->maxLength(255)
-                            ->helperText('Email user, opsional'),
+                            ->unique(ignoreRecord: true)
+                            ->dehydrateStateUsing(fn(?string $state) => $state ? strtolower(trim($state)) : null)
+                            ->validationMessages([
+                                'email' => 'Format email tidak valid.',
+                                'unique' => 'Email sudah digunakan.',
+                                'max' => 'Email maksimal 255 karakter.',
+                            ])
+                            ->helperText('Akan menerima email untuk verifikasi.'),
 
                         TextInput::make('nisn')
                             ->label('NISN')
-                            ->unique(ignoreRecord: true)
-                            ->nullable()
+                            ->nullable(fn(Get $get) => $get('role') !== 'siswa')
+                            ->required(fn(Get $get) => $get('role') === 'siswa')
                             ->numeric()
-                            ->maxLength(10)
-                            ->helperText('Hanya untuk siswa, 10 digit angka'),
+                            ->length(10)
+                            ->unique(ignoreRecord: true)
+                            ->visible(fn(Get $get) => $get('role') === 'siswa')
+                            ->dehydrateStateUsing(fn(?string $state) => $state ? trim($state) : null)
+                            ->validationMessages([
+                                'required' => 'NISN wajib diisi untuk role siswa.',
+                                'numeric' => 'NISN hanya boleh berisi angka.',
+                                'size' => 'NISN harus tepat 10 digit.',
+                                'unique' => 'NISN sudah digunakan.',
+                            ])
+                            ->helperText('Hanya untuk siswa, wajib 10 digit angka.'),
                     ]),
 
                     Grid::make(2)->schema([
@@ -60,21 +97,32 @@ class UserForm
                             ->label('Password')
                             ->password()
                             ->revealable()
-                            ->dehydrateStateUsing(fn($state) => filled($state) ? Hash::make($state) : null)
-                            ->dehydrated(fn($state) => filled($state))
                             ->required(fn(string $operation) => $operation === 'create')
-                            ->minLength(8)
+                            ->rules([
+                                Password::min(8)
+                                    ->letters()
+                                    ->mixedCase()
+                                    ->numbers()
+                                    ->symbols()
+                                    ->uncompromised(),
+                            ])
+                            ->confirmed()
                             ->maxLength(255)
-                            ->helperText('Min 8 karakter, kosongkan jika tidak ingin mengubah password'),
+                            ->dehydrateStateUsing(fn(?string $state) => filled($state) ? Hash::make($state) : null)
+                            ->dehydrated(fn(?string $state) => filled($state))
+                            ->validationMessages([
+                                'required' => 'Password wajib diisi saat membuat user.',
+                                'confirmed' => 'Konfirmasi password tidak sama.',
+                            ])
+                            ->helperText('Minimal 8 karakter, berisi huruf besar, huruf kecil, angka, simbol, dan tidak termasuk password yang bocor.'),
 
                         TextInput::make('password_confirmation')
                             ->label('Konfirmasi Password')
                             ->password()
                             ->revealable()
-                            ->same('password')
                             ->required(fn(string $operation) => $operation === 'create')
                             ->dehydrated(false)
-                            ->helperText('Ulangi password yang sama'),
+                            ->helperText('Ulangi password yang sama.'),
                     ]),
 
                     Placeholder::make('email_verified_at')
