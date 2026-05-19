@@ -34,7 +34,7 @@ class KelasResource extends Resource
     }
     public static function getNavigationSort(): ?int
     {
-        return 4; // ganti angka sesuai urutan yang lo mau
+        return 5; // ganti angka sesuai urutan yang lo mau
     }
     public static function getModelLabel(): string
     {

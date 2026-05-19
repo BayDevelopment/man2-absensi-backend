@@ -2,8 +2,9 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Database\Factories\UserFactory;
+use Filament\Models\Contracts\FilamentUser;  // ← tambah ini
+use Filament\Panel;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -17,27 +18,36 @@ use Spatie\Permission\Traits\HasRoles;
 
 #[Fillable(['name', 'email', 'nisn', 'password', 'role'])]
 #[Hidden(['password', 'remember_token'])]
-class User extends Authenticatable implements MustVerifyEmail
+class User extends Authenticatable implements MustVerifyEmail, FilamentUser  // ← tambah FilamentUser
 {
     /** @use HasFactory<UserFactory> */
     use HasApiTokens, HasFactory, Notifiable, HasRoles;
 
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
     protected function casts(): array
     {
         return [
             'email_verified_at' => 'datetime',
-            'password' => 'hashed',
+            'password'          => 'hashed',
         ];
     }
 
     protected $attributes = [
         'role' => 'siswa',
     ];
+
+    // =========================================================================
+    // Filament Access
+    // =========================================================================
+
+    public function canAccessPanel(Panel $panel): bool
+    {
+        return in_array($this->role, ['admin', 'guru'])
+            && $this->hasVerifiedEmail();  // ← wajib verified
+    }
+
+    // =========================================================================
+    // Relationships
+    // =========================================================================
 
     public function kelas(): BelongsTo
     {
@@ -53,10 +63,12 @@ class User extends Authenticatable implements MustVerifyEmail
     {
         return $this->hasMany(JadwalModel::class, 'guru_id');
     }
+
     public function siswa()
     {
         return $this->hasOne(SiswaModel::class);
     }
+
     public function guru()
     {
         return $this->hasMany(GuruModel::class, 'user_id');

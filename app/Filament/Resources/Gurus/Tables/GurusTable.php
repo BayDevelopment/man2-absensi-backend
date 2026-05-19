@@ -23,7 +23,12 @@ class GurusTable
             ->columns([
                 ImageColumn::make('foto')
                     ->label('Foto')
-                    ->circular(),
+                    ->circular()
+                    ->defaultImageUrl(null)
+                    ->extraImgAttributes(['style' => 'display:none'])
+                    ->placeholder(fn($state) => blank($state)
+                        ? new \Illuminate\Support\HtmlString('<em style="color: gray;">Belum ada foto</em>')
+                        : null),
 
                 TextColumn::make('nama_lengkap')
                     ->label('Nama Lengkap')
@@ -34,7 +39,8 @@ class GurusTable
                     ->label('NIP')
                     ->searchable()
                     ->sortable()
-                    ->toggleable(),
+                    ->toggleable()
+                    ->placeholder(fn() => new \Illuminate\Support\HtmlString('<em style="color: gray;">Belum Punya NIP</em>')),
 
                 TextColumn::make('jabatan.nama')
                     ->label('Jabatan')

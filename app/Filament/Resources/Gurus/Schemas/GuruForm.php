@@ -2,13 +2,18 @@
 
 namespace App\Filament\Resources\Gurus\Schemas;
 
+use App\Models\User;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Validation\Rule;
 
 class GuruForm
 {
@@ -19,24 +24,55 @@ class GuruForm
                 Section::make('Informasi Akun')
                     ->description('Data akun pengguna yang terhubung dengan guru.')
                     ->icon('heroicon-o-user-circle')
+                    ->columnSpanFull()
                     ->schema([
                         Select::make('user_id')
                             ->label('Akun Pengguna')
-                            ->relationship('user', 'name')
+                            ->relationship(
+                                name: 'user',
+                                titleAttribute: 'name',
+                                modifyQueryUsing: static fn($query) => $query
+                                    ->where('role', 'guru')
+                                    ->whereNotNull('email_verified_at')
+                            )
                             ->searchable()
                             ->preload()
                             ->required()
-                            ->helperText('Pilih akun login yang akan digunakan guru ini. Satu akun hanya bisa terhubung ke satu guru.')
+                            ->native(false)
+                            ->live() // ← ganti reactive() dengan live() untuk Filament v3
+                            ->afterStateUpdated(function (Get $get, Set $set) {
+                                $userId = $get('user_id');
+                                $email = User::find($userId)?->email;
+                                $set('email', $email ?? '');
+                            })
+                            ->disabled(
+                                static fn(): bool => ! User::query()
+                                    ->where('role', 'guru')
+                                    ->whereNotNull('email_verified_at')
+                                    ->exists()
+                            )
+                            ->dehydrated(true)
+                            ->helperText(
+                                static fn(): string => User::query()
+                                    ->where('role', 'guru')
+                                    ->whereNotNull('email_verified_at')
+                                    ->exists()
+                                    ? 'Pilih akun login yang akan digunakan guru ini. Satu akun hanya bisa terhubung ke satu guru.'
+                                    : '⚠️ Belum ada akun guru yang sudah verifikasi email. Minta guru untuk verifikasi email terlebih dahulu.'
+                            )
+                            ->columnSpanFull()
+                            ->validationAttribute('akun pengguna')
+                            ->rules(['required', 'integer'])
                             ->validationMessages([
                                 'required' => 'Akun pengguna wajib dipilih.',
-                            ])
-                            ->columnSpanFull(),
+                                'integer'  => 'Pilihan akun pengguna tidak valid.',
+                            ]),
                     ]),
 
                 Section::make('Data Pribadi')
                     ->description('Informasi pribadi guru.')
                     ->icon('heroicon-o-identification')
-                    ->columns(2)
+                    ->columnSpanFull()
                     ->schema([
                         TextInput::make('nip')
                             ->label('NIP')
@@ -86,14 +122,15 @@ class GuruForm
                         TextInput::make('email')
                             ->label('Email')
                             ->email()
-                            ->placeholder('Contoh: budi.santoso@sekolah.sch.id')
+                            ->placeholder('Otomatis terisi saat akun dipilih...')
                             ->maxLength(255)
-                            ->helperText('Alamat email aktif guru. Digunakan untuk keperluan komunikasi dan notifikasi.')
-                            ->rules(['nullable', 'email', 'max:255'])
-                            ->validationMessages([
-                                'email' => 'Format email tidak valid. Contoh: nama@domain.com',
-                                'max'   => 'Email maksimal 255 karakter.',
-                            ]),
+                            ->helperText('Email diambil otomatis dari akun pengguna yang dipilih.')
+                            ->afterStateHydrated(
+                                fn($component, $record) =>
+                                $component->state($record?->user?->email)
+                            )
+                            ->disabled()
+                            ->dehydrated(true),
 
                         TextInput::make('no_hp')
                             ->label('No. HP / WhatsApp')
@@ -101,10 +138,18 @@ class GuruForm
                             ->placeholder('Contoh: 08123456789')
                             ->maxLength(20)
                             ->helperText('Nomor HP aktif yang bisa dihubungi, diawali 08 atau +62.')
-                            ->rules(['nullable', 'string', 'max:20', 'regex:/^(\+62|08)[0-9]{7,15}$/'])
+                            ->rules([
+                                'nullable',
+                                'string',
+                                'max:20',
+                                'regex:/^(\+62|08)[0-9]{7,15}$/',
+                                fn(Get $get, ?Model $record) => Rule::unique('gurus', 'no_hp')
+                                    ->ignore($record?->id),
+                            ])
                             ->validationMessages([
-                                'max'   => 'Nomor HP maksimal 20 karakter.',
-                                'regex' => 'Format nomor HP tidak valid. Gunakan format 08xxxxxxxxx atau +62xxxxxxxxx.',
+                                'max'    => 'Nomor HP maksimal 20 karakter.',
+                                'regex'  => 'Format nomor HP tidak valid. Gunakan format 08xxxxxxxxx atau +62xxxxxxxxx.',
+                                'unique' => 'Nomor HP sudah digunakan oleh guru lain.',
                             ]),
 
                         Textarea::make('alamat')
@@ -123,6 +168,7 @@ class GuruForm
                 Section::make('Foto Profil')
                     ->description('Unggah foto profil guru untuk ditampilkan di sistem.')
                     ->icon('heroicon-o-photo')
+                    ->columnSpanFull()
                     ->schema([
                         FileUpload::make('foto')
                             ->label('Foto Profil')
@@ -150,6 +196,7 @@ class GuruForm
                     ->description('Data wajah digunakan untuk absensi otomatis berbasis pengenalan wajah.')
                     ->icon('heroicon-o-face-smile')
                     ->collapsed()
+                    ->columnSpanFull()
                     ->schema([
                         FileUpload::make('face_image')
                             ->label('Foto Wajah')
@@ -177,6 +224,7 @@ class GuruForm
                 Section::make('Status Guru')
                     ->description('Atur status keaktifan guru di sistem.')
                     ->icon('heroicon-o-check-badge')
+                    ->columnSpanFull()
                     ->schema([
                         Toggle::make('is_active')
                             ->label('Guru Aktif')

@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Filament\Resources\TahunAjarans\Tables;
+namespace App\Filament\Resources\JabatanGurus\Tables;
 
 use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
@@ -8,52 +8,52 @@ use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Notifications\Notification;
-use Filament\Tables\Columns\BadgeColumn;
+use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 
-class TahunAjaransTable
+class JabatanGurusTable
 {
     public static function configure(Table $table): Table
     {
         return $table
             ->columns([
-                TextColumn::make('nama')
-                    ->label('Tahun Ajaran')
-                    ->searchable()
+                TextColumn::make('id')
+                    ->label('ID')
                     ->sortable()
-                    ->weight('semibold'),
+                    ->toggleable(isToggledHiddenByDefault: true),
 
-                TextColumn::make('tanggal_mulai')
-                    ->label('Tanggal Mulai')
-                    ->date('d M Y')
+                TextColumn::make('nama')
+                    ->label('Nama Jabatan')
+                    ->searchable()
                     ->sortable(),
 
-                TextColumn::make('tanggal_selesai')
-                    ->label('Tanggal Selesai')
-                    ->date('d M Y')
-                    ->sortable(),
-
-                BadgeColumn::make('is_active')
-                    ->label('Status')
-                    ->formatStateUsing(fn(bool $state): string => $state ? 'Aktif' : 'Tidak Aktif')
-                    ->colors([
-                        'success' => true,
-                        'gray'    => false,
-                    ]),
+                IconColumn::make('bisa_mengajar')
+                    ->label('Bisa Mengajar')
+                    ->boolean()
+                    ->trueIcon('heroicon-o-check-circle')
+                    ->falseIcon('heroicon-o-x-circle')
+                    ->trueColor('success')
+                    ->falseColor('danger'),
 
                 TextColumn::make('created_at')
                     ->label('Dibuat')
-                    ->dateTime('d M Y H:i')
+                    ->dateTime('d M Y, H:i')
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+
+                TextColumn::make('updated_at')
+                    ->label('Diperbarui')
+                    ->dateTime('d M Y, H:i')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
-                TernaryFilter::make('is_active')
-                    ->label('Status')
-                    ->trueLabel('Aktif')
-                    ->falseLabel('Tidak Aktif')
+                TernaryFilter::make('bisa_mengajar')
+                    ->label('Bisa Mengajar')
+                    ->trueLabel('Ya')
+                    ->falseLabel('Tidak')
                     ->placeholder('Semua'),
             ])
             ->recordActions([

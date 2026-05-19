@@ -54,6 +54,10 @@ class GuruModel extends Model
     {
         return $this->belongsTo(JabatanModel::class);
     }
+    public function guruMapel()
+    {
+        return $this->hasMany(GuruMapelModel::class, 'guru_id');
+    }
 
     /**
      * Accessor untuk menampilkan jenis kelamin secara lengkap

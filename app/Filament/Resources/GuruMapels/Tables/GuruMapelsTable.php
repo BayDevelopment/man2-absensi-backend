@@ -1,60 +1,83 @@
 <?php
 
-namespace App\Filament\Resources\TahunAjarans\Tables;
+namespace App\Filament\Resources\GuruMapels\Tables;
 
+use App\Models\GuruModel;
+use App\Models\MataPelajaran;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Notifications\Notification;
-use Filament\Tables\Columns\BadgeColumn;
+use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\TernaryFilter;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 
-class TahunAjaransTable
+class GuruMapelsTable
 {
     public static function configure(Table $table): Table
     {
         return $table
             ->columns([
-                TextColumn::make('nama')
-                    ->label('Tahun Ajaran')
+                TextColumn::make('guru.nama_lengkap')
+                    ->label('Guru')
+                    ->searchable()
+                    ->sortable(),
+
+                TextColumn::make('guru.nip')
+                    ->label('NIP')
                     ->searchable()
                     ->sortable()
-                    ->weight('semibold'),
+                    ->placeholder('-'),
 
-                TextColumn::make('tanggal_mulai')
-                    ->label('Tanggal Mulai')
-                    ->date('d M Y')
+                TextColumn::make('mataPelajaran.nama')
+                    ->label('Mata Pelajaran')
+                    ->searchable()
                     ->sortable(),
 
-                TextColumn::make('tanggal_selesai')
-                    ->label('Tanggal Selesai')
-                    ->date('d M Y')
-                    ->sortable(),
-
-                BadgeColumn::make('is_active')
+                IconColumn::make('is_active')
                     ->label('Status')
-                    ->formatStateUsing(fn(bool $state): string => $state ? 'Aktif' : 'Tidak Aktif')
-                    ->colors([
-                        'success' => true,
-                        'gray'    => false,
-                    ]),
+                    ->boolean()
+                    ->trueIcon('heroicon-o-check-circle')
+                    ->falseIcon('heroicon-o-x-circle')
+                    ->trueColor('success')
+                    ->falseColor('danger'),
 
                 TextColumn::make('created_at')
                     ->label('Dibuat')
                     ->dateTime('d M Y H:i')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
+
+                TextColumn::make('updated_at')
+                    ->label('Diubah')
+                    ->dateTime('d M Y H:i')
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
+                SelectFilter::make('guru_id')
+                    ->label('Guru')
+                    ->relationship('guru', 'nama_lengkap')
+                    ->searchable()
+                    ->preload()
+                    ->native(false),
+
+                SelectFilter::make('mata_pelajaran_id')
+                    ->label('Mata Pelajaran')
+                    ->relationship('mataPelajaran', 'nama')
+                    ->searchable()
+                    ->preload()
+                    ->native(false),
+
                 TernaryFilter::make('is_active')
-                    ->label('Status')
+                    ->label('Status Aktif')
+                    ->placeholder('Semua Status')
                     ->trueLabel('Aktif')
-                    ->falseLabel('Tidak Aktif')
-                    ->placeholder('Semua'),
+                    ->falseLabel('Tidak Aktif'),
             ])
             ->recordActions([
                 ActionGroup::make([
