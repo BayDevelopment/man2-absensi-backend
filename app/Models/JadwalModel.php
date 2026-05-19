@@ -8,21 +8,29 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class JadwalModel extends Model
 {
-    protected $table    = 'jadwals';
+    protected $table = 'jadwals';
+
     protected $fillable = [
         'kelas_id',
         'mata_pelajaran_id',
         'guru_id',
+        'tahun_ajaran_id',
+        'semester_id',
         'hari',
         'jam_mulai',
         'jam_selesai',
         'ruang',
+        'is_break',
+        'label',
+        'urutan',
     ];
 
     protected $casts = [
-        'jam_mulai'   => 'string',
-        'jam_selesai' => 'string',
+        'is_break' => 'boolean',
+        'urutan'   => 'integer',
     ];
+
+    const HARI = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
 
     public function kelas(): BelongsTo
     {
@@ -36,11 +44,16 @@ class JadwalModel extends Model
 
     public function guru(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'guru_id');
+        return $this->belongsTo(GuruModel::class, 'guru_id');
     }
 
-    public function absensi(): HasMany
+    public function tahunAjaran(): BelongsTo
     {
-        return $this->hasMany(AbsensiModel::class, 'jadwal_id');
+        return $this->belongsTo(TahunAjaranModel::class, 'tahun_ajaran_id');
+    }
+
+    public function semester(): BelongsTo
+    {
+        return $this->belongsTo(SemesterModel::class, 'semester_id');
     }
 }

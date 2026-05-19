@@ -6,18 +6,15 @@ use Illuminate\Database\Eloquent\Model;
 
 class JamSekolahModel extends Model
 {
-    protected $table    = 'jam_sekolah';
-    protected $fillable = ['jam_masuk', 'batas_terlambat', 'aktif'];
+    protected $table = 'jam_sekolah';
 
-    protected $casts = [
-        'aktif'           => 'boolean',
-        'jam_masuk'       => 'string',
-        'batas_terlambat' => 'string',
+    protected $fillable = [
+        'jam_masuk',
+        'batas_terlambat',
+        'aktif',
     ];
 
-    // Ambil konfigurasi aktif (singleton helper)
-    public static function aktif(): ?static
-    {
-        return static::where('aktif', true)->first();
-    }
+    protected $casts = [
+        'aktif' => 'boolean',
+    ];
 }
