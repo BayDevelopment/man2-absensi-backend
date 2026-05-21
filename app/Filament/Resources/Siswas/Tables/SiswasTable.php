@@ -22,7 +22,7 @@ class SiswasTable
     {
         return $table
             ->columns([
-                TextColumn::make('nisn')
+                TextColumn::make('nis')
                     ->label('NISN')
                     ->sortable()
                     ->searchable(),

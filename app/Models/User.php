@@ -64,13 +64,12 @@ class User extends Authenticatable implements MustVerifyEmail, FilamentUser  // 
         return $this->hasMany(JadwalModel::class, 'guru_id');
     }
 
-    public function siswa()
-    {
-        return $this->hasOne(SiswaModel::class);
-    }
-
     public function guru()
     {
         return $this->hasMany(GuruModel::class, 'user_id');
+    }
+    public function siswa()
+    {
+        return $this->hasOne(SiswaModel::class, 'user_id', 'id');
     }
 }

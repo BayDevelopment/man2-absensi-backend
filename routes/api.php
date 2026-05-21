@@ -4,9 +4,11 @@ use App\Http\Controllers\Api\AbsensiController;
 use App\Http\Controllers\Api\AttendanceController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\DashboardController;
+use App\Http\Controllers\Api\SiswaFaceController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/login',  [AuthController::class, 'login']);
+Route::get('/login',  [AuthController::class, 'index']);
 
 
 // Protected routes (butuh token)
@@ -15,16 +17,18 @@ Route::middleware('auth:sanctum', 'siswa')->group(function () {
     Route::get('/me',      [AuthController::class, 'me']);
 
     // Absensi
-    Route::get('/absensi', [AttendanceController::class, 'index']);
-    Route::get('/absensi/today', [AttendanceController::class, 'today']);
+    Route::get('/absensi', [AbsensiController::class, 'index']);
+    Route::post('/absensi/masuk', [AbsensiController::class, 'absenMasuk']);
+    Route::post('/absensi/keluar', [AbsensiController::class, 'absenKeluar']);
+    Route::post('/absensi/status', [AbsensiController::class, 'simpanStatus']);
+    Route::get('/absensi/jadwal-by-tanggal', [AbsensiController::class, 'getJadwalByTanggal']);
 
-    Route::post('/absensi/check-in', [AttendanceController::class, 'checkIn']);
-    Route::post('/absensi/check-out', [AttendanceController::class, 'checkOut']);
-
-    Route::post('/absensi/izin', [AttendanceController::class, 'submitIzin']);
+    Route::post('/siswa/{siswa}/register-face', [SiswaFaceController::class, 'registerFace']);
 
     // Dashboard
-    Route::get('/dashboard/summary',        [DashboardController::class, 'summary']);
+    Route::get('/dashboard', [DashboardController::class, 'index']);
+
+    Route::get('/dashboard/summary', [DashboardController::class, 'summary']);
     Route::get('/dashboard/jadwal-hari-ini', [DashboardController::class, 'jadwalHariIni']);
-    Route::get('/dashboard/pengumuman',     [DashboardController::class, 'pengumuman']);
+    Route::get('/dashboard/pengumuman', [DashboardController::class, 'pengumuman']);
 });

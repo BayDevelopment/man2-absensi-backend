@@ -1,0 +1,76 @@
+<?php
+
+namespace App\Filament\Resources\Notifications;
+
+use App\Filament\Resources\Notifications\Pages\CreateNotification;
+use App\Filament\Resources\Notifications\Pages\EditNotification;
+use App\Filament\Resources\Notifications\Pages\ListNotifications;
+use App\Filament\Resources\Notifications\Schemas\NotificationForm;
+use App\Filament\Resources\Notifications\Tables\NotificationsTable;
+use App\Models\Notification;
+use App\Models\NotificationModel;
+use BackedEnum;
+use Filament\Resources\Resource;
+use Filament\Schemas\Schema;
+use Filament\Support\Icons\Heroicon;
+use Filament\Tables\Table;
+
+class NotificationResource extends Resource
+{
+    protected static ?string $model = NotificationModel::class;
+
+    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-bell-alert';
+
+    protected static ?string $recordTitleAttribute = 'user_id';
+
+    // ADD
+    protected function getRedirectUrl(): string
+    {
+        return $this->getResource()::getUrl('index');
+    }
+    public static function getNavigationGroup(): ?string
+    {
+        return 'Monitoring';
+    }
+    public static function getNavigationSort(): ?int
+    {
+        return 5; // ganti angka sesuai urutan yang lo mau
+    }
+    public static function getModelLabel(): string
+    {
+        return 'Set Notifikasi';
+    }
+    public static function getPluralModelLabel(): string
+    {
+        return 'Set Notifikasi';
+    }
+    protected static ?string $navigationLabel = 'Set Notifikasi';
+    protected static ?int    $navigationSort  = 1;
+    // LAST ADD
+
+    public static function form(Schema $schema): Schema
+    {
+        return NotificationForm::configure($schema);
+    }
+
+    public static function table(Table $table): Table
+    {
+        return NotificationsTable::configure($table);
+    }
+
+    public static function getRelations(): array
+    {
+        return [
+            //
+        ];
+    }
+
+    public static function getPages(): array
+    {
+        return [
+            'index' => ListNotifications::route('/'),
+            'create' => CreateNotification::route('/create'),
+            'edit' => EditNotification::route('/{record}/edit'),
+        ];
+    }
+}

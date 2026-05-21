@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Siswas\Schemas;
 use App\Models\User;
 use App\Models\Kelas;
 use App\Models\KelasModel;
+use App\Models\SiswaModel;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
@@ -12,6 +13,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 
 class SiswaForm
@@ -26,22 +28,111 @@ class SiswaForm
 
                     Grid::make(2)->schema([
 
-                        TextInput::make('nisn')
+                        Select::make('user_id')
+                            ->label('Pilih Siswa')
+                            ->required()
+                            ->searchable()
+                            ->preload()
+                            ->live()
+                            ->options(function (?SiswaModel $record) {
+                                // 1. Ambil user_id yang sudah ada di tabel siswas
+                                $userSudahTerdaftar = SiswaModel::query()
+                                    ->whereNotNull('user_id')
+                                    ->when(
+                                        $record?->user_id,
+                                        fn($query) => $query->where('user_id', '!=', $record->user_id)
+                                    )
+                                    ->pluck('user_id')
+                                    ->toArray();
+
+                                return User::query()
+                                    // 2. Filter berdasarkan role siswa (kolom text atau Spatie)
+                                    ->where(function ($query) {
+                                        $query->where('role', 'siswa')
+                                            ->orWhereHas('roles', function ($q) {
+                                                $q->where('name', 'siswa');
+                                            });
+                                    })
+                                    // 3. Pastikan user belum terdaftar di tabel siswas
+                                    ->whereNotIn('id', $userSudahTerdaftar)
+                                    ->orderBy('name')
+                                    ->get()
+                                    ->mapWithKeys(function ($user) {
+                                        // Dropdown mengambil dari kolom 'nisn' milik tabel users untuk info pencarian
+                                        $nisnTampil = $user->nisn ?? 'Tanpa NISN';
+                                        return [
+                                            $user->id => "{$nisnTampil} - {$user->name}",
+                                        ];
+                                    })
+                                    ->toArray();
+                            })
+                            ->afterStateHydrated(function (Set $set, ?SiswaModel $record) {
+                                if (! $record?->user) {
+                                    return;
+                                }
+                                // Saat edit, ambil data 'nis' dari tabel siswa atau fallback ke 'nisn' milik user
+                                $set('nis', $record->nis ?? $record->user->nisn);
+                                $set('email', $record->user->email);
+                                $set('nama_lengkap', $record->nama_lengkap ?? $record->user->name);
+                            })
+                            ->afterStateUpdated(function (Set $set, ?int $state) {
+                                if (! $state) {
+                                    $set('nis', null);
+                                    $set('email', null);
+                                    $set('nama_lengkap', null);
+                                    return;
+                                }
+
+                                $user = User::query()->find($state);
+
+                                // Lempar data 'nisn' milik tabel USERS ke komponen form bernama 'nis'
+                                $set('nis', $user?->nisn);
+                                $set('email', $user?->email);
+                                $set('nama_lengkap', $user?->name);
+                            })
+                            ->helperText('Pilih akun siswa yang belum memiliki profil di tabel siswa.')
+                            ->validationAttribute('siswa')
+                            ->validationMessages([
+                                'required' => 'Siswa wajib dipilih.',
+                            ]),
+
+                        TextInput::make('nis') // 💡 Menggunakan nama field 'nis' sesuai kolom tabel siswas
                             ->label('NISN')
                             ->required()
-                            ->unique(ignoreRecord: true)
+                            ->disabled()
+                            ->dehydrated() // Tetap disimpan ke database saat disubmit
                             ->numeric()
                             ->minLength(10)
                             ->maxLength(10)
-                            ->helperText('Masukkan NISN siswa (10 digit angka).')
+                            ->unique(
+                                table: SiswaModel::class,
+                                column: 'nis', // 💡 Diubah ke 'nis' karena di tabel siswas kolomnya bernama 'nis'
+                                ignoreRecord: true,
+                            )
+                            ->helperText('NISN otomatis diambil dari data user.')
                             ->validationAttribute('NISN')
                             ->validationMessages([
-                                'required'  => 'NISN wajib diisi.',
-                                'numeric'   => 'NISN hanya boleh berisi angka.',
-                                'min'       => 'NISN harus tepat 10 digit.',
-                                'max'       => 'NISN harus tepat 10 digit.',
-                                'unique'    => 'NISN ini sudah terdaftar.',
+                                'required' => 'NISN wajib diisi.',
+                                'numeric'  => 'NISN hanya boleh berisi angka.',
+                                'min'      => 'NISN harus tepat 10 digit.',
+                                'max'      => 'NISN harus tepat 10 digit.',
+                                'unique'   => 'NISN ini sudah terdaftar.',
                             ]),
+
+                        TextInput::make('email')
+                            ->label('Email')
+                            ->required()
+                            ->disabled()
+                            ->dehydrated()
+                            ->email()
+                            ->helperText('Email otomatis diambil dari user yang sudah terverifikasi.')
+                            ->validationAttribute('email')
+                            ->validationMessages([
+                                'required' => 'Email wajib diisi.',
+                                'email'    => 'Format email tidak valid.',
+                            ]),
+
+
 
                         TextInput::make('nama_lengkap')
                             ->label('Nama Lengkap')
@@ -57,41 +148,6 @@ class SiswaForm
                             ]),
 
                     ]),
-
-                    Select::make('user_id')
-                        ->label('Akun User')
-                        ->relationship(
-                            name: 'user',
-                            titleAttribute: 'name',
-                            modifyQueryUsing: static fn($query) => $query
-                                ->where('role', 'siswa')
-                                ->whereNotNull('email_verified_at')  // harus sudah verified
-                        )
-                        ->searchable()
-                        ->preload()
-                        ->required()
-                        ->native(false)
-                        ->disabled(
-                            static fn(): bool => ! User::query()
-                                ->where('role', 'siswa')
-                                ->whereNotNull('email_verified_at')
-                                ->exists()
-                        )
-                        ->dehydrated(true)
-                        ->helperText(
-                            static fn(): string => User::query()
-                                ->where('role', 'siswa')
-                                ->whereNotNull('email_verified_at')
-                                ->exists()
-                                ? 'Pilih akun user dengan role siswa yang terkait.'
-                                : '⚠️ Belum ada akun siswa yang sudah verifikasi email. Minta siswa untuk verifikasi email terlebih dahulu.'
-                        )
-                        ->validationAttribute('akun user')
-                        ->rules(['required', 'integer'])
-                        ->validationMessages([
-                            'required' => 'Akun user wajib dipilih.',
-                            'integer'  => 'Pilihan akun user tidak valid.',
-                        ]),
                     Select::make('jenis_kelamin')
                         ->label('Jenis Kelamin')
                         ->options([

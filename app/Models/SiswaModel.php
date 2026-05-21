@@ -13,7 +13,7 @@ class SiswaModel extends Model
     protected $fillable = [
         'user_id',
         'kelas_id',
-        'nisn',
+        'nis',
         'nama_lengkap',
         'jenis_kelamin',
         'no_hp',
@@ -34,6 +34,6 @@ class SiswaModel extends Model
     }
     public function kelas()
     {
-        return $this->belongsTo(KelasModel::class);
+        return $this->belongsTo(KelasModel::class, 'kelas_id');
     }
 }
