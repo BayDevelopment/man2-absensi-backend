@@ -443,35 +443,32 @@ class DashboardController extends Controller
         }
 
         try {
-            $table = (new PengumumanModel())->getTable();
+            $today = Carbon::now('Asia/Jakarta')->toDateString();
 
-            $query = PengumumanModel::query();
-
-            // Untuk sementara jangan pakai scope tampil(),
-            // supaya bisa dipastikan data pengumuman memang keluar.
-            if (Schema::hasColumn($table, 'published_at')) {
-                $query->orderByDesc('published_at');
-            } elseif (Schema::hasColumn($table, 'created_at')) {
-                $query->orderByDesc('created_at');
-            }
-
-            return $query
+            return PengumumanModel::query()
+                ->where(function ($q) use ($today) {
+                    $q->whereNull('published_at')
+                        ->orWhereDate('published_at', '<=', $today);
+                })
+                ->where(function ($q) use ($today) {
+                    $q->whereNull('expired_at')
+                        ->orWhereDate('expired_at', '>', $today);
+                })
+                ->latest('published_at')
+                ->latest('created_at')
                 ->take(5)
                 ->get()
-                ->map(function ($p) {
-                    $tanggal = $p->published_at ?? $p->created_at ?? now();
-
-                    return [
-                        'id'          => $p->id,
-                        'judul'       => $p->judul ?? $p->title ?? 'Pengumuman',
-                        'isi'         => $p->isi ?? $p->content ?? null,
-                        'dibuat_oleh' => $p->dibuat_oleh ?? null,
-                        'tanggal'     => Carbon::parse($tanggal)->translatedFormat('d M Y'),
-                        'expired_at'  => $p->expired_at
-                            ? Carbon::parse($p->expired_at)->translatedFormat('d M Y')
-                            : null,
-                    ];
-                })
+                ->map(fn($p) => [
+                    'id'          => $p->id,
+                    'judul'       => $p->judul ?? 'Pengumuman',
+                    'isi'         => $p->isi ?? null,
+                    'dibuat_oleh' => $p->dibuat_oleh ?? null,
+                    'tanggal'     => Carbon::parse($p->published_at ?? $p->created_at)
+                        ->translatedFormat('d M Y'),
+                    'expired_at'  => $p->expired_at
+                        ? Carbon::parse($p->expired_at)->translatedFormat('d M Y')
+                        : null,
+                ])
                 ->values();
         } catch (\Exception $e) {
             Log::error('getPengumumanData failed', [

@@ -49,11 +49,6 @@ class User extends Authenticatable implements MustVerifyEmail, FilamentUser  // 
     // Relationships
     // =========================================================================
 
-    public function kelas(): BelongsTo
-    {
-        return $this->belongsTo(KelasModel::class, 'kelas_id');
-    }
-
     public function absensi(): HasMany
     {
         return $this->hasMany(AbsensiModel::class, 'siswa_id');
@@ -68,8 +63,30 @@ class User extends Authenticatable implements MustVerifyEmail, FilamentUser  // 
     {
         return $this->hasMany(GuruModel::class, 'user_id');
     }
+    // Relasi ke tabel siswas
     public function siswa()
     {
-        return $this->hasOne(SiswaModel::class, 'user_id', 'id');
+        return $this->hasOne(SiswaModel::class, 'user_id');
+    }
+
+    // Relasi ke settings
+    public function notificationSetting()
+    {
+        return $this->hasOne(NotificationModel::class, 'user_id');
+    }
+
+    public function securitySetting()
+    {
+        return $this->hasOne(UserSecuritySetting::class, 'user_id');
+    }
+
+    public function appearanceSetting()
+    {
+        return $this->hasOne(UserAppearanceSetting::class, 'user_id');
+    }
+
+    public function userSessions()
+    {
+        return $this->hasMany(UserSession::class, 'user_id');
     }
 }

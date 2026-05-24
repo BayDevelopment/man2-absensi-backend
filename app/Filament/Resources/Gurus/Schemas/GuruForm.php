@@ -31,24 +31,35 @@ class GuruForm
                             ->relationship(
                                 name: 'user',
                                 titleAttribute: 'name',
-                                modifyQueryUsing: static fn($query) => $query
-                                    ->where('role', 'guru')
-                                    ->whereNotNull('email_verified_at')
+                                modifyQueryUsing: static function ($query, Get $get) {
+                                    $currentUserId = $get('user_id'); // user_id yang sedang diedit
+
+                                    return $query
+                                        ->where('role', 'guru')
+                                        ->whereNotNull('email_verified_at')
+                                        ->where(function ($q) use ($currentUserId) {
+                                            // Tampilkan user yang belum punya guru
+                                            $q->whereDoesntHave('guru')
+                                                // ATAU user yang sedang dipakai record ini (mode edit)
+                                                ->when($currentUserId, fn($q2) => $q2->orWhere('id', $currentUserId));
+                                        });
+                                }
                             )
                             ->searchable()
                             ->preload()
                             ->required()
                             ->native(false)
-                            ->live() // ← ganti reactive() dengan live() untuk Filament v3
+                            ->live()
                             ->afterStateUpdated(function (Get $get, Set $set) {
                                 $userId = $get('user_id');
                                 $email = User::find($userId)?->email;
                                 $set('email', $email ?? '');
                             })
                             ->disabled(
-                                static fn(): bool => ! User::query()
+                                static fn(): bool => !User::query()
                                     ->where('role', 'guru')
                                     ->whereNotNull('email_verified_at')
+                                    ->whereDoesntHave('guru') // ✅ cek apakah ada yang belum terhubung
                                     ->exists()
                             )
                             ->dehydrated(true)
@@ -56,9 +67,10 @@ class GuruForm
                                 static fn(): string => User::query()
                                     ->where('role', 'guru')
                                     ->whereNotNull('email_verified_at')
+                                    ->whereDoesntHave('guru')
                                     ->exists()
                                     ? 'Pilih akun login yang akan digunakan guru ini. Satu akun hanya bisa terhubung ke satu guru.'
-                                    : '⚠️ Belum ada akun guru yang sudah verifikasi email. Minta guru untuk verifikasi email terlebih dahulu.'
+                                    : '⚠️ Semua akun guru sudah terhubung ke data guru. Tambahkan akun baru terlebih dahulu.'
                             )
                             ->columnSpanFull()
                             ->validationAttribute('akun pengguna')

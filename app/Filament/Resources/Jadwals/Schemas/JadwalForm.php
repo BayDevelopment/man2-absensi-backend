@@ -8,6 +8,7 @@ use App\Models\KelasModel;
 use App\Models\SemesterModel;
 use App\Models\TahunAjaranModel;
 use Filament\Schemas\Schema;
+use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TimePicker;
 use Filament\Forms\Components\TextInput;
@@ -15,6 +16,7 @@ use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
+use Carbon\Carbon;
 
 class JadwalForm
 {
@@ -85,16 +87,50 @@ class JadwalForm
                                 'exists'   => 'Kelas tidak ditemukan.',
                             ]),
 
+                        // ✅ DatePicker tanggal — auto-fill hari
+                        DatePicker::make('tanggal')
+                            ->label('Tanggal')
+                            ->native(false)
+                            ->displayFormat('d/m/Y')
+                            ->live()
+                            ->afterStateUpdated(function (?string $state, Set $set) {
+                                if ($state) {
+                                    $hariMap = [
+                                        'Monday'    => 'Senin',
+                                        'Tuesday'   => 'Selasa',
+                                        'Wednesday' => 'Rabu',
+                                        'Thursday'  => 'Kamis',
+                                        'Friday'    => 'Jumat',
+                                        'Saturday'  => 'Sabtu',
+                                    ];
+
+                                    $englishDay = Carbon::parse($state)->englishDayOfWeek;
+                                    $set('hari', $hariMap[$englishDay] ?? null);
+                                } else {
+                                    $set('hari', null);
+                                }
+                            })
+                            ->helperText('Pilih tanggal jadwal. Hari akan terisi otomatis.')
+                            ->rules(['nullable', 'date'])
+                            ->validationMessages([
+                                'date' => 'Format tanggal tidak valid.',
+                            ]),
+
+                        // ✅ Hari — readonly, terisi otomatis dari tanggal
                         Select::make('hari')
                             ->label('Hari')
                             ->options(collect(JadwalModel::HARI)->mapWithKeys(fn($h) => [$h => $h]))
                             ->required()
                             ->native(false)
+                            ->disabled() // di-disable karena auto-fill dari tanggal
+                            ->dehydrated() // tetap kirim nilainya saat submit meski disabled
+                            ->helperText('Terisi otomatis dari tanggal yang dipilih.')
                             ->rules(['required', 'in:Senin,Selasa,Rabu,Kamis,Jumat,Sabtu'])
                             ->validationMessages([
-                                'required' => 'Hari wajib dipilih.',
+                                'required' => 'Hari wajib dipilih (pilih tanggal terlebih dahulu).',
                                 'in'       => 'Hari tidak valid.',
                             ]),
+
                     ])->columns(2),
 
                 Section::make('Slot Waktu')
@@ -208,6 +244,7 @@ class JadwalForm
                             ->validationMessages([
                                 'exists' => 'Guru tidak ditemukan.',
                             ]),
+
                         TextInput::make('label')
                             ->label('Label')
                             ->placeholder('Contoh: Istirahat & Sholat Dzuhur')

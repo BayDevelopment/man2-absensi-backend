@@ -16,6 +16,7 @@ class JadwalModel extends Model
         'guru_id',
         'tahun_ajaran_id',
         'semester_id',
+        'tanggal',
         'hari',
         'jam_mulai',
         'jam_selesai',
@@ -26,6 +27,7 @@ class JadwalModel extends Model
     ];
 
     protected $casts = [
+        'tanggal' => 'date',
         'is_break' => 'boolean',
         'urutan'   => 'integer',
     ];

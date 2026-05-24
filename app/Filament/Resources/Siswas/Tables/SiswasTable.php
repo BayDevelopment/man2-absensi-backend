@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Siswas\Tables;
 
+use App\Filament\Actions\RegisterFaceAction;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
@@ -101,6 +102,7 @@ class SiswasTable
                                 ->body('Data berhasil dihapus')
                                 ->success()
                         ),
+                    RegisterFaceAction::make(),
                 ])
                     ->label('Aksi')
                     ->icon('heroicon-o-ellipsis-vertical')

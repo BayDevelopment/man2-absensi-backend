@@ -121,7 +121,24 @@ class KelasTable
 
             ->defaultSort('created_at', 'desc')
             ->recordActions([
-                EditAction::make(),
+                ActionGroup::make([
+                    EditAction::make(),
+
+                    DeleteAction::make()
+                        ->requiresConfirmation()
+                        ->modalHeading('Hapus data?')
+                        ->modalDescription('Data akan dipindahkan ke trash.')
+                        ->successNotification(
+                            Notification::make()
+                                ->title('Berhasil')
+                                ->body('Data berhasil dihapus')
+                                ->success()
+                        ),
+                ])
+                    ->label('Aksi')
+                    ->icon('heroicon-o-ellipsis-vertical')
+                    ->button()
+                    ->outlined(),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

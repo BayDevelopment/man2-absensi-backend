@@ -11,9 +11,12 @@ use Filament\Actions\EditAction;
 use Filament\Notifications\Notification;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
+use Filament\Forms\Components\DatePicker;
+use Illuminate\Database\Eloquent\Builder;
 
 class JadwalsTable
 {
@@ -28,18 +31,26 @@ class JadwalsTable
                     ->badge()
                     ->color('info'),
 
+                // ✅ Ganti DatePicker → TextColumn
+                TextColumn::make('tanggal')
+                    ->label('Tanggal')
+                    ->date('d/m/Y')
+                    ->sortable()
+                    ->placeholder('-'),
+
                 TextColumn::make('hari')
                     ->label('Hari')
                     ->sortable()
                     ->searchable()
                     ->badge()
-                    ->color(fn(string $state) => match ($state) {
+                    ->color(fn(?string $state): string => match ($state) {
                         'Senin'  => 'info',
                         'Selasa' => 'success',
                         'Rabu'   => 'warning',
                         'Kamis'  => 'danger',
                         'Jumat'  => 'primary',
                         'Sabtu'  => 'gray',
+                        default  => 'gray',
                     }),
 
                 TextColumn::make('jam_mulai')
@@ -56,17 +67,17 @@ class JadwalsTable
                     ->label('Mata Pelajaran')
                     ->sortable()
                     ->searchable()
-                    ->default('-'),
+                    ->placeholder('-'),
 
                 TextColumn::make('guru.nama_lengkap')
                     ->label('Guru')
                     ->sortable()
                     ->searchable()
-                    ->default('-'),
+                    ->placeholder('-'),
 
                 TextColumn::make('ruang')
                     ->label('Ruang')
-                    ->default('-')
+                    ->placeholder('-')
                     ->searchable(),
 
                 IconColumn::make('is_break')
@@ -81,6 +92,7 @@ class JadwalsTable
                     ->label('Urutan')
                     ->sortable(),
             ])
+            ->defaultSort('tanggal', 'asc')
             ->filters([
                 SelectFilter::make('kelas_id')
                     ->label('Kelas')
@@ -93,6 +105,44 @@ class JadwalsTable
                     ->label('Hari')
                     ->options(collect(JadwalModel::HARI)->mapWithKeys(fn($h) => [$h => $h]))
                     ->native(false),
+
+                Filter::make('tanggal')
+                    ->label('Rentang Tanggal')
+                    ->form([
+                        DatePicker::make('dari')
+                            ->label('Dari Tanggal')
+                            ->native(false)
+                            ->displayFormat('d/m/Y'),
+
+                        DatePicker::make('sampai')
+                            ->label('Sampai Tanggal')
+                            ->native(false)
+                            ->displayFormat('d/m/Y'),
+                    ])
+                    ->query(function (Builder $query, array $data): Builder {
+                        return $query
+                            ->when(
+                                $data['dari'],
+                                fn(Builder $q, $date) => $q->whereDate('tanggal', '>=', $date)
+                            )
+                            ->when(
+                                $data['sampai'],
+                                fn(Builder $q, $date) => $q->whereDate('tanggal', '<=', $date)
+                            );
+                    })
+                    ->indicateUsing(function (array $data): array {
+                        $indicators = [];
+
+                        if ($data['dari'] ?? null) {
+                            $indicators['dari'] = 'Dari: ' . \Carbon\Carbon::parse($data['dari'])->format('d/m/Y');
+                        }
+
+                        if ($data['sampai'] ?? null) {
+                            $indicators['sampai'] = 'Sampai: ' . \Carbon\Carbon::parse($data['sampai'])->format('d/m/Y');
+                        }
+
+                        return $indicators;
+                    }),
 
                 SelectFilter::make('guru_id')
                     ->label('Guru')

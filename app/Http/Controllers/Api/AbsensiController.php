@@ -21,7 +21,7 @@ class AbsensiController extends Controller
      * Untuk AbsensiPage.vue final di bawah, nilainya dibuat false agar tombol absen tetap jalan
      * walaupun modul kamera/face-api belum dipasang di frontend.
      */
-    private const REQUIRE_FACE_FOR_FIRST_MAPEL = false;
+    private const REQUIRE_FACE_FOR_FIRST_MAPEL = true;
 
     /**
      * Threshold descriptor wajah.
@@ -135,9 +135,10 @@ class AbsensiController extends Controller
     {
         $validated = $request->validate([
             'jadwal_id' => ['required', 'exists:jadwals,id'],
-            'kelas_id' => ['nullable', 'integer'],
+            'siswa_id' => ['prohibited'],
+            'kelas_id' => ['prohibited'],
             'face_descriptor' => ['nullable', 'array', 'size:128'],
-            'face_descriptor.*' => ['nullable', 'numeric'],
+            'face_descriptor.*' => ['required_with:face_descriptor', 'numeric'],
             'face_image' => ['nullable', 'image', 'mimes:jpg,jpeg,png', 'max:2048'],
         ]);
 
@@ -259,6 +260,14 @@ class AbsensiController extends Controller
                     'message' => 'Absen mapel pertama wajib menggunakan verifikasi wajah.',
                 ], 422);
             }
+
+            if (!$request->hasFile('face_image')) {
+                return response()->json([
+                    'success' => false,
+                    'type' => 'face_image_required',
+                    'message' => 'Foto wajah wajib dikirim sebagai bukti absensi.',
+                ], 422);
+            }
         }
 
         if (!empty($registeredDescriptor) && !empty($incomingDescriptor)) {
@@ -272,10 +281,6 @@ class AbsensiController extends Controller
                     'success' => false,
                     'type' => 'face_not_match',
                     'message' => 'Wajah tidak sama. Pastikan wajah sesuai dengan akun siswa yang login.',
-                    'data' => [
-                        'distance' => $faceResult['distance'] ?? null,
-                        'confidence' => $faceResult['confidence'] ?? null,
-                    ],
                 ], 403);
             }
 
@@ -740,7 +745,8 @@ class AbsensiController extends Controller
             'can_absen_masuk' => $canAbsenPagi,
             'can_absen_keluar' => false,
             'can_izin_sakit' => $canAbsenPagi,
-            'is_mapel_selesai' => (bool) ($isLewatBatas || $isMapelSelesai),
+            'is_mapel_selesai' => (bool) $isMapelSelesai,
+            'is_attendance_closed' => (bool) $isLewatBatas,
 
             'action_state' => $actionState,
             'action_text' => $actionText,
@@ -996,12 +1002,37 @@ class AbsensiController extends Controller
             return null;
         }
 
-        return array_map('floatval', array_values($descriptor));
+        $normalized = [];
+
+        foreach (array_values($descriptor) as $value) {
+            if (!is_int($value) && !is_float($value) && !is_string($value)) {
+                return null;
+            }
+
+            if (!is_numeric($value)) {
+                return null;
+            }
+
+            $float = (float) $value;
+
+            if (!is_finite($float) || abs($float) > 10) {
+                return null;
+            }
+
+            $normalized[] = $float;
+        }
+
+        return count($normalized) === 128 ? $normalized : null;
     }
 
     private function compareFaceDescriptors(?array $registeredDescriptor, ?array $incomingDescriptor): array
     {
-        if (!$registeredDescriptor || !$incomingDescriptor) {
+        if (
+            !$registeredDescriptor ||
+            !$incomingDescriptor ||
+            count($registeredDescriptor) !== 128 ||
+            count($incomingDescriptor) !== 128
+        ) {
             return [
                 'matched' => false,
                 'distance' => null,
