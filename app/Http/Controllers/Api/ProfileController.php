@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\AbsensiModel;
+use App\Models\AngkatanModel;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -34,17 +35,39 @@ class ProfileController extends Controller
             ], 404);
         }
 
-        $absensiQuery = AbsensiModel::where('siswa_id', $siswa->id);
+        $absensi = AbsensiModel::where('siswa_id', $siswa->id)
+            ->whereYear('tanggal', now('Asia/Jakarta')->year)
+            ->get();
 
-        $totalHadir = (clone $absensiQuery)->where('status', 'hadir')->count();
-        $totalIzin  = (clone $absensiQuery)->where('status', 'izin')->count();
-        $totalSakit = (clone $absensiQuery)->where('status', 'sakit')->count();
-        $totalAlfa  = (clone $absensiQuery)->where('status', 'alfa')->count();
-        $totalHari  = (clone $absensiQuery)->count();
+        $normalize = fn($value) => strtolower(trim((string) $value));
 
-        $persentaseHadir = $totalHari > 0
-            ? round(($totalHadir / $totalHari) * 100, 1)
-            : 0;
+        $totalHadir = $absensi->filter(
+            fn($item) =>
+            in_array($normalize($item->status), ['hadir', 'terlambat'], true)
+        )->count();
+
+        $totalIzin = $absensi->filter(
+            fn($item) =>
+            $normalize($item->status) === 'izin'
+        )->count();
+
+        $totalSakit = $absensi->filter(
+            fn($item) =>
+            $normalize($item->status) === 'sakit'
+        )->count();
+
+        $totalAlfa = $absensi->filter(
+            fn($item) =>
+            in_array($normalize($item->status), ['alfa', 'alpha'], true)
+        )->count();
+
+        $totalHari = $absensi->count();
+
+        $persentase = function (int $jumlah) use ($totalHari): string {
+            return $totalHari > 0
+                ? round(($jumlah / $totalHari) * 100) . '%'
+                : '0%';
+        };
 
         $tanggalLahir = $siswa->tanggal_lahir
             ? $siswa->tanggal_lahir->format('Y-m-d')
@@ -63,37 +86,41 @@ class ProfileController extends Controller
                     'nis'           => $siswa->nis ?? '',
                     'kelas'         => $siswa->kelas?->nama_kelas ?? '-',
                     'jurusan'       => $siswa->kelas?->jurusan ?? '-',
+                    'angkatan_id'   => $siswa->angkatan_id,
                     'angkatan'      => $siswa->angkatan?->nama ?? '-',
-
                     'tempat_lahir'  => $siswa->tempat_lahir ?? '',
                     'tanggal_lahir' => $tanggalLahir,
                     'ttl'           => $ttl ?: '-',
-
                     'jenis_kelamin' => $siswa->jenis_kelamin === 'L'
                         ? 'Laki-laki'
                         : ($siswa->jenis_kelamin === 'P' ? 'Perempuan' : '-'),
-
                     'agama'         => $siswa->agama ?? '',
                     'alamat'        => $siswa->alamat ?? '',
                     'no_hp'         => $siswa->no_hp ?? '',
                     'no_telp'       => $siswa->no_hp ?? '',
                     'email'         => $user->email ?? '',
-
                     'nama_ayah'     => $siswa->nama_ayah ?? '',
                     'nama_ibu'      => $siswa->nama_ibu ?? '',
                     'no_wali'       => $siswa->no_wali ?? '',
-
                     'foto'          => $siswa->foto
                         ? asset('storage/' . $siswa->foto)
                         : null,
                 ],
 
+                'angkatan_options' => AngkatanModel::query()
+                    ->orderBy('nama')
+                    ->get(['id', 'nama']),
+
                 'absensi' => [
                     'total_hari'       => $totalHari,
                     'total_hadir'      => $totalHadir,
-                    'total_izin_sakit' => $totalIzin + $totalSakit,
+                    'total_izin'       => $totalIzin,
+                    'total_sakit'      => $totalSakit,
                     'total_alfa'       => $totalAlfa,
-                    'persentase_hadir' => $persentaseHadir . '%',
+                    'persentase_hadir' => $persentase($totalHadir),
+                    'persentase_izin'  => $persentase($totalIzin),
+                    'persentase_sakit' => $persentase($totalSakit),
+                    'persentase_alfa'  => $persentase($totalAlfa),
                 ],
             ],
         ]);
@@ -128,35 +155,11 @@ class ProfileController extends Controller
                 'max:100',
                 'regex:/^[\pL\s\'\-\.]+$/u',
             ],
-
-            'agama' => [
-                'sometimes',
-                'nullable',
-                'string',
-                'max:50',
-            ],
-
-            'tempat_lahir' => [
-                'sometimes',
-                'nullable',
-                'string',
-                'max:100',
-            ],
-
-            'tanggal_lahir' => [
-                'sometimes',
-                'nullable',
-                'date',
-                'before_or_equal:today',
-            ],
-
-            'alamat' => [
-                'sometimes',
-                'nullable',
-                'string',
-                'max:500',
-            ],
-
+            'angkatan_id' => ['sometimes', 'nullable', 'exists:angkatans,id'],
+            'agama' => ['sometimes', 'nullable', 'string', 'max:50'],
+            'tempat_lahir' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'tanggal_lahir' => ['sometimes', 'nullable', 'date', 'before_or_equal:today'],
+            'alamat' => ['sometimes', 'nullable', 'string', 'max:500'],
             'no_hp' => [
                 'sometimes',
                 'nullable',
@@ -165,7 +168,6 @@ class ProfileController extends Controller
                 'max:20',
                 'regex:/^(\+62|62|0)[0-9]{8,13}$/',
             ],
-
             'email' => [
                 'sometimes',
                 'required',
@@ -174,21 +176,8 @@ class ProfileController extends Controller
                 'max:100',
                 Rule::unique('users', 'email')->ignore($user->id),
             ],
-
-            'nama_ayah' => [
-                'sometimes',
-                'nullable',
-                'string',
-                'max:100',
-            ],
-
-            'nama_ibu' => [
-                'sometimes',
-                'nullable',
-                'string',
-                'max:100',
-            ],
-
+            'nama_ayah' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'nama_ibu' => ['sometimes', 'nullable', 'string', 'max:100'],
             'no_wali' => [
                 'sometimes',
                 'nullable',
@@ -197,23 +186,6 @@ class ProfileController extends Controller
                 'max:20',
                 'regex:/^(\+62|62|0)[0-9]{8,13}$/',
             ],
-        ], [
-            'nama.required' => 'Nama wajib diisi.',
-            'nama.min' => 'Nama minimal 3 karakter.',
-            'nama.regex' => 'Nama hanya boleh berisi huruf, spasi, titik, petik, dan tanda hubung.',
-
-            'tanggal_lahir.date' => 'Format tanggal lahir tidak valid.',
-            'tanggal_lahir.before_or_equal' => 'Tanggal lahir tidak boleh melebihi hari ini.',
-
-            'no_hp.regex' => 'Format No. HP tidak valid. Contoh: 08123456789.',
-            'no_hp.min' => 'No. HP minimal 10 digit.',
-
-            'email.required' => 'Email wajib diisi.',
-            'email.email' => 'Format email tidak valid.',
-            'email.unique' => 'Email sudah digunakan akun lain.',
-
-            'no_wali.regex' => 'Format No. Wali tidak valid. Contoh: 08123456789.',
-            'no_wali.min' => 'No. Wali minimal 10 digit.',
         ]);
 
         if ($validator->fails()) {
@@ -238,36 +210,22 @@ class ProfileController extends Controller
             $siswaData['nama_lengkap'] = $validated['nama'];
         }
 
-        if (array_key_exists('agama', $validated)) {
-            $siswaData['agama'] = $validated['agama'];
-        }
-
-        if (array_key_exists('tempat_lahir', $validated)) {
-            $siswaData['tempat_lahir'] = $validated['tempat_lahir'];
-        }
-
-        if (array_key_exists('tanggal_lahir', $validated)) {
-            $siswaData['tanggal_lahir'] = $validated['tanggal_lahir'];
-        }
-
-        if (array_key_exists('alamat', $validated)) {
-            $siswaData['alamat'] = $validated['alamat'];
-        }
-
-        if (array_key_exists('no_hp', $validated)) {
-            $siswaData['no_hp'] = $validated['no_hp'];
-        }
-
-        if (array_key_exists('nama_ayah', $validated)) {
-            $siswaData['nama_ayah'] = $validated['nama_ayah'];
-        }
-
-        if (array_key_exists('nama_ibu', $validated)) {
-            $siswaData['nama_ibu'] = $validated['nama_ibu'];
-        }
-
-        if (array_key_exists('no_wali', $validated)) {
-            $siswaData['no_wali'] = $validated['no_wali'];
+        foreach (
+            [
+                'angkatan_id',
+                'agama',
+                'tempat_lahir',
+                'tanggal_lahir',
+                'alamat',
+                'no_hp',
+                'nama_ayah',
+                'nama_ibu',
+                'no_wali',
+            ] as $field
+        ) {
+            if (array_key_exists($field, $validated)) {
+                $siswaData[$field] = $validated[$field];
+            }
         }
 
         if (!empty($siswaData)) {

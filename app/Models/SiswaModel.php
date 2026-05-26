@@ -66,4 +66,8 @@ class SiswaModel extends Model
     {
         return $this->belongsTo(User::class, 'face_registered_by');
     }
+    public function absensis()
+    {
+        return $this->hasMany(AbsensiModel::class, 'siswa_id', 'id');
+    }
 }

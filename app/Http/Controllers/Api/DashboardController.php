@@ -180,6 +180,11 @@ class DashboardController extends Controller
 
         $kelasId = $this->getKelasIdFromUser($user);
 
+        // ✅ FIX: Ambil siswa_id yang benar dari tabel siswas (sama seperti getSummaryData)
+        $siswaId = DB::table('siswas')
+            ->where('user_id', $user->id)
+            ->value('id') ?? $user->id;
+
         // Cache jam sekolah sebagai plain array (bukan Eloquent object)
         $jamSekolahArr = Cache::remember('jam_sekolah_aktif', now()->addMinutes(30), function () {
             $row = JamSekolahModel::where('aktif', true)->first();
@@ -195,6 +200,7 @@ class DashboardController extends Controller
 
         $debug = [
             'user_id'                   => $user?->id,
+            'siswa_id_dipakai'          => $siswaId, // ✅ tambah debug siswa_id
             'user_name'                 => $user?->name,
             'kelas_id_dipakai'          => $kelasId,
             'hari_dicari'               => $namaHari,
@@ -214,9 +220,10 @@ class DashboardController extends Controller
         $absensiTable       = (new AbsensiModel())->getTable();
         $punyaKolomJadwalId = Schema::hasColumn($absensiTable, 'jadwal_id');
 
+        // ✅ FIX: Pakai $siswaId bukan $user->id
         $absensiPerJadwal = collect();
         if ($punyaKolomJadwalId) {
-            $absensiPerJadwal = AbsensiModel::where('siswa_id', $user->id)
+            $absensiPerJadwal = AbsensiModel::where('siswa_id', $siswaId)
                 ->whereDate('tanggal', $tanggalHariIni)
                 ->get()
                 ->keyBy('jadwal_id');
@@ -224,7 +231,8 @@ class DashboardController extends Controller
 
         $absensiHariIni = null;
         if (!$punyaKolomJadwalId) {
-            $absensiHariIni = AbsensiModel::where('siswa_id', $user->id)
+            // ✅ FIX: Pakai $siswaId bukan $user->id
+            $absensiHariIni = AbsensiModel::where('siswa_id', $siswaId)
                 ->whereDate('tanggal', $tanggalHariIni)
                 ->first();
         }
@@ -241,7 +249,6 @@ class DashboardController extends Controller
             $rows = JadwalModel::with(['kelas', 'mataPelajaran', 'guru'])
                 ->where('kelas_id', $kelasId)
                 ->where('hari', $namaHari)
-                // Jangan filter is_break, supaya jadwal istirahat tetap tampil
                 ->orderByRaw('COALESCE(urutan, 999)')
                 ->orderBy('jam_mulai')
                 ->get();
@@ -250,16 +257,12 @@ class DashboardController extends Controller
                 return in_array($j->is_break ?? false, [true, 1, '1', 'true'], true);
             };
 
-            // Jadwal pertama untuk absen mandiri harus mapel, bukan istirahat
             $firstMapelId = $rows
                 ->first(fn($j) => !$isBreakRow($j) && !empty($j->mata_pelajaran_id))
                 ?->id;
 
-            // Fallback jika field mata_pelajaran_id tidak ada / kosong
             if (!$firstMapelId) {
-                $firstMapelId = $rows
-                    ->first(fn($j) => !$isBreakRow($j))
-                    ?->id;
+                $firstMapelId = $rows->first(fn($j) => !$isBreakRow($j))?->id;
             }
 
             return $rows->values()->map(function ($j) use (
@@ -282,12 +285,7 @@ class DashboardController extends Controller
 
                 $namaGuru = $isBreak
                     ? '-'
-                    : (
-                        $j->guru?->nama
-                        ?? $j->guru?->name
-                        ?? $j->guru?->nama_guru
-                        ?? '-'
-                    );
+                    : ($j->guru?->nama ?? $j->guru?->name ?? $j->guru?->nama_guru ?? '-');
 
                 $isJadwalPertama = !$isBreak && $j->id === $firstMapelId;
 
@@ -313,26 +311,16 @@ class DashboardController extends Controller
                     'jam_buka_absen'    => $bukaAbsen,
                     'jam_tutup_absen'   => $tutupAbsen,
                     'is_jadwal_pertama' => $isJadwalPertama,
-
                     'is_break'          => $isBreak,
                     'is_istirahat'      => $isBreak,
                     'tipe_absen'        => $tipeAbsen,
-
                     'ruang'             => $j->ruang ?? 'Kelas',
                     'mapel'             => $mapel,
                     'nama_guru'         => $namaGuru,
-
                     'mata_pelajaran_id' => $j->mata_pelajaran_id ?? null,
                     'guru_id'           => $j->guru_id ?? null,
-
-                    'mata_pelajaran'    => [
-                        'id'   => $j->mataPelajaran?->id,
-                        'nama' => $mapel,
-                    ],
-                    'guru'              => [
-                        'id'   => $j->guru?->id,
-                        'nama' => $namaGuru,
-                    ],
+                    'mata_pelajaran'    => ['id' => $j->mataPelajaran?->id, 'nama' => $mapel],
+                    'guru'              => ['id' => $j->guru?->id, 'nama' => $namaGuru],
                     'kelas'             => [
                         'id'   => $j->kelas?->id,
                         'nama' => $j->kelas?->nama ?? $j->kelas?->name ?? '-',
@@ -351,7 +339,6 @@ class DashboardController extends Controller
                 || ($j['is_istirahat'] ?? false)
                 || (($j['tipe_absen'] ?? null) === 'non_absen');
 
-            // Istirahat tidak punya status absen
             if ($isIstirahat) {
                 return array_merge($j, [
                     'sudah_absen'  => false,
