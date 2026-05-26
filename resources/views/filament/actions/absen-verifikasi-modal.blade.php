@@ -1,16 +1,22 @@
-{{-- ============================================================
-     ABSEN MASUK — VERIFIKASI WAJAH
-     Filament v3  ·  Admin & Guru panel
-     ============================================================
-     Props yang diharapkan dari Action/Page:
-       $jadwal       – object  (mata_pelajaran, kelas, guru, jam_mulai, jam_selesai)
-       $siswaList    – Collection<SiswaModel>  (siswa dengan face_descriptor)
-       $threshold    – float  default 0.42
-     ============================================================ --}}
+{{--
+    ============================================================
+    ABSEN MASUK — VERIFIKASI WAJAH
+    Filament v3+ · face-api.js via CDN
+    ============================================================
+    Props yang diharapkan dari Action/Page:
+      $jadwal    – object    (mata_pelajaran, kelas, guru, jam_mulai, jam_selesai)
+      $siswaList – Collection (siswa dengan face_descriptor & face_image_path)
+      $threshold – float     default 0.42
+    ============================================================
+--}}
 
 @once
     <style>
-        /* Corner-frame guide */
+        [x-cloak] {
+            display: none !important;
+        }
+
+        /* ── Corner-frame guide ─────────────────────────────────── */
         .cf-wrap::before,
         .cf-wrap::after,
         .cf-wrap>span::before,
@@ -51,7 +57,7 @@
             border-radius: 0 0 5px 0;
         }
 
-        /* Scan sweep line */
+        /* ── Scan sweep ─────────────────────────────────────────── */
         @keyframes sweep {
             0% {
                 top: 10%;
@@ -80,7 +86,7 @@
             box-shadow: 0 0 8px #22c55e88;
         }
 
-        /* Ripple on match */
+        /* ── Match ripple ───────────────────────────────────────── */
         @keyframes ripple {
             0% {
                 transform: scale(1);
@@ -102,6 +108,7 @@
             animation: ripple .8s ease-out forwards;
         }
 
+        /* ── Utilities ──────────────────────────────────────────── */
         @keyframes fadeSlideUp {
             from {
                 opacity: 0;
@@ -136,34 +143,45 @@
     </style>
 
     <script>
-        /* ── Helpers ─────────────────────────────────────────────── */
-        window.loadFaceApiScript = window.loadFaceApiScript || function() {
-            return new Promise((resolve, reject) => {
+        /* ── face-api loader (singleton, race-condition safe) ──── */
+        window._faceApiPromise = window._faceApiPromise ?? null;
+
+        window.loadFaceApiScript = function() {
+            if (window._faceApiPromise) return window._faceApiPromise;
+
+            window._faceApiPromise = new Promise((resolve, reject) => {
                 if (window.faceapi) {
                     resolve(window.faceapi);
                     return;
                 }
-                const ex = document.querySelector('script[data-face-api]');
-                if (ex) {
-                    ex.addEventListener('load', () => resolve(window.faceapi), {
+
+                const existing = document.querySelector('script[data-face-api]');
+                if (existing) {
+                    existing.addEventListener('load', () => resolve(window.faceapi), {
                         once: true
                     });
-                    ex.addEventListener('error', reject, {
+                    existing.addEventListener('error', reject, {
                         once: true
                     });
                     return;
                 }
+
                 const s = document.createElement('script');
                 s.src = 'https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js';
                 s.async = true;
                 s.dataset.faceApi = 'true';
                 s.onload = () => resolve(window.faceapi);
-                s.onerror = reject;
+                s.onerror = (err) => {
+                    window._faceApiPromise = null;
+                    reject(err);
+                };
                 document.head.appendChild(s);
             });
+
+            return window._faceApiPromise;
         };
 
-        /* ── Alpine component ────────────────────────────────────── */
+        /* ── Alpine component factory ──────────────────────────── */
         window.absenVerifikasi = function({
             siswaList,
             threshold
@@ -191,17 +209,21 @@
                 /* — init — */
                 async init() {
                     this.modelsLoading = true;
+
                     try {
                         await window.loadFaceApiScript();
+
                         const BASE = 'https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights';
+
                         await Promise.all([
                             faceapi.nets.tinyFaceDetector.loadFromUri(BASE),
                             faceapi.nets.faceLandmark68TinyNet.loadFromUri(BASE),
                             faceapi.nets.faceRecognitionNet.loadFromUri(BASE),
                         ]);
+
                         this.modelsLoaded = true;
                     } catch (err) {
-                        console.error(err);
+                        console.error('[AbsenVerifikasi] loadModels:', err);
                         this.errorMsg = 'Gagal memuat model AI. Periksa koneksi internet.';
                     } finally {
                         this.modelsLoading = false;
@@ -214,9 +236,14 @@
                     this.matchResult = null;
                     this.matchError = '';
                     this.stopCamera();
+
                     try {
-                        if (!navigator.mediaDevices?.getUserMedia) throw new Error(
-                            'Browser tidak mendukung kamera.');
+                        if (!navigator.mediaDevices?.getUserMedia) {
+                            throw Object.assign(new Error('Browser tidak mendukung kamera.'), {
+                                name: 'NotSupportedError'
+                            });
+                        }
+
                         this._stream = await navigator.mediaDevices.getUserMedia({
                             video: {
                                 width: {
@@ -229,21 +256,25 @@
                             },
                             audio: false,
                         });
+
                         const video = this.$refs.video;
+
                         video.srcObject = this._stream;
-                        await new Promise(r => {
+                        await new Promise(resolve => {
                             if (video.readyState >= 2) {
-                                r();
+                                resolve();
                                 return;
                             }
-                            video.onloadedmetadata = r;
+                            video.onloadedmetadata = resolve;
                         });
+
                         await video.play();
+
                         this.cameraActive = true;
                         this.step = 1;
                         this.startDetectionLoop();
                     } catch (err) {
-                        console.error(err);
+                        console.error('[AbsenVerifikasi] startCamera:', err);
                         this.errorMsg = 'Kamera tidak dapat diakses. Pastikan izin kamera sudah diberikan.';
                         this.stopCamera();
                     }
@@ -252,14 +283,17 @@
                 stopCamera() {
                     this._stream?.getTracks().forEach(t => t.stop());
                     this._stream = null;
+
                     if (this._detectionInterval) {
                         clearInterval(this._detectionInterval);
                         this._detectionInterval = null;
                     }
+
                     if (this.$refs.video) {
                         this.$refs.video.pause?.();
                         this.$refs.video.srcObject = null;
                     }
+
                     this.cameraActive = false;
                     this.faceDetected = false;
                     this.multipleFaces = false;
@@ -270,27 +304,40 @@
                 /* — detection loop — */
                 startDetectionLoop() {
                     if (this._detectionInterval) clearInterval(this._detectionInterval);
+
                     this._detectionInterval = setInterval(async () => {
-                        if (this._detecting || !this.cameraActive || !this.$refs.video || !this.$refs
-                            .overlayCanvas) return;
+                        if (
+                            this._detecting ||
+                            !this.cameraActive ||
+                            !this.$refs.video ||
+                            !this.$refs.overlayCanvas
+                        ) return;
+
                         const video = this.$refs.video;
                         const canvas = this.$refs.overlayCanvas;
+
                         if (!video.videoWidth) return;
+
                         this._detecting = true;
+
                         try {
                             const displaySize = {
                                 width: video.videoWidth,
                                 height: video.videoHeight
                             };
+
                             faceapi.matchDimensions(canvas, displaySize);
+
                             const detections = await faceapi
                                 .detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({
                                     scoreThreshold: 0.5
                                 }))
                                 .withFaceLandmarks(true)
                                 .withFaceDescriptors();
+
                             const ctx = canvas.getContext('2d');
                             ctx.clearRect(0, 0, canvas.width, canvas.height);
+
                             const resized = faceapi.resizeResults(detections, displaySize);
 
                             if (resized.length !== 1) {
@@ -299,17 +346,20 @@
                                 resized.forEach(d => this.drawBox(ctx, d.detection.box, '#ef4444'));
                                 return;
                             }
+
                             this.faceDetected = true;
                             this.multipleFaces = false;
+
                             faceapi.draw.drawFaceLandmarks(canvas, resized);
                             this.drawBox(ctx, resized[0].detection.box, this.scanning ? '#22c55e' :
                                 '#60a5fa');
 
+                            // Jalankan match hanya jika masih dalam mode scanning
                             if (this.scanning && resized[0]?.descriptor) {
                                 await this.runMatch(Array.from(resized[0].descriptor));
                             }
                         } catch (err) {
-                            console.error(err);
+                            console.error('[AbsenVerifikasi] detect:', err);
                         } finally {
                             this._detecting = false;
                         }
@@ -319,18 +369,21 @@
                 drawBox(ctx, box, color) {
                     ctx.strokeStyle = color;
                     ctx.lineWidth = 2;
+
                     if (typeof ctx.roundRect === 'function') {
                         ctx.beginPath();
                         ctx.roundRect(box.x, box.y, box.width, box.height, 8);
                         ctx.stroke();
                         return;
                     }
+
                     ctx.strokeRect(box.x, box.y, box.width, box.height);
                 },
 
                 /* — verification — */
                 startVerifikasi() {
                     if (!this.faceDetected || this.multipleFaces) return;
+
                     this.errorMsg = '';
                     this.matchError = '';
                     this.matchResult = null;
@@ -339,7 +392,7 @@
                 },
 
                 async runMatch(descriptor) {
-                    if (!this.scanning) return;
+                    // Set false dulu agar detection loop tidak masuk lagi selama proses matching
                     this.scanning = false;
 
                     const labeledDescriptors = siswaList
@@ -405,8 +458,7 @@
                     :class="{
                         'bg-primary-600 text-white ring-primary-600 shadow-md': step === idx + 1,
                         'bg-green-500   text-white ring-green-500': step > idx + 1,
-                        'bg-white       text-gray-400 ring-gray-200 dark:bg-gray-800 dark:ring-gray-700': step < idx +
-                            1,
+                        'bg-white text-gray-400 ring-gray-200 dark:bg-gray-800 dark:ring-gray-700': step < idx + 1,
                     }">
                     <template x-if="step > idx + 1">
                         <svg class="h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"
@@ -447,6 +499,7 @@
                         d="M4.26 10.147a60.438 60.438 0 0 0-.491 6.347A48.62 48.62 0 0 1 12 20.904a48.62 48.62 0 0 1 8.232-4.41 60.46 60.46 0 0 0-.491-6.347m-15.482 0a50.636 50.636 0 0 0-2.658-.813A59.906 59.906 0 0 1 12 3.493a59.903 59.903 0 0 1 10.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.717 50.717 0 0 1 12 13.489a50.702 50.702 0 0 1 10.741-3.342" />
                 </svg>
             </div>
+
             <div class="min-w-0 flex-1">
                 <p class="truncate text-sm font-semibold text-gray-800 dark:text-gray-100">
                     {{ $jadwal->mata_pelajaran ?? '—' }}
@@ -461,6 +514,7 @@
                     {{ $jadwal->jam_mulai ?? '' }}–{{ $jadwal->jam_selesai ?? '' }}
                 </p>
             </div>
+
             <div class="shrink-0 text-right">
                 <p class="text-xs font-semibold text-gray-700 dark:text-gray-300">{{ now()->format('H:i') }}</p>
                 <p class="text-xs text-gray-400">{{ now()->translatedFormat('d M Y') }}</p>
@@ -508,6 +562,7 @@
 
     {{-- ── STEP 1 & 2: Camera ───────────────────────────────────── --}}
     <div x-show="step <= 2">
+
         {{-- Viewport --}}
         <div class="relative w-full overflow-hidden rounded-2xl bg-gray-950 shadow-xl" style="aspect-ratio: 16/10;"
             :class="{
@@ -518,28 +573,26 @@
                 'ring-1 ring-gray-700': !faceDetected && !multipleFaces && !scanning && cameraActive,
                 'ring-1 ring-gray-800': !cameraActive,
             }">
-
             <video x-ref="video" autoplay playsinline muted class="absolute inset-0 h-full w-full object-cover"
                 x-show="cameraActive"></video>
+
             <canvas x-ref="overlayCanvas" class="pointer-events-none absolute inset-0 h-full w-full"
                 x-show="cameraActive"></canvas>
 
-            {{-- Corner-frame oval guide --}}
+            {{-- Corner-frame guide --}}
             <div x-show="cameraActive" class="pointer-events-none absolute inset-0 flex items-center justify-center">
                 <div class="cf-wrap relative" style="width: 42%; height: 78%;"
                     :class="{
                         'border-green-400': faceDetected && !multipleFaces,
                         'border-red-400': multipleFaces,
-                        'border-white/25': !faceDetected,
+                        'border-white/25': !faceDetected && !multipleFaces,
                     }">
                     <span></span>
-
-                    {{-- scan sweep --}}
                     <div x-show="scanning" class="scan-sweep absolute inset-0"></div>
                 </div>
             </div>
 
-            {{-- Idle / inactive --}}
+            {{-- Idle placeholder --}}
             <div x-show="!cameraActive"
                 class="absolute inset-0 flex flex-col items-center justify-center gap-4 text-gray-500">
                 <div class="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/5 ring-1 ring-white/10">
@@ -556,8 +609,8 @@
                 </div>
             </div>
 
-            {{-- Scanning overlay text --}}
-            <div x-show="scanning"
+            {{-- Scanning overlay --}}
+            <div x-show="scanning" x-cloak
                 class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-gray-950/90 to-transparent px-5 pb-4 pt-8 text-center">
                 <p class="text-xs font-semibold tracking-wide text-white/90">
                     <span
@@ -570,7 +623,7 @@
             <div x-show="faceDetected && !multipleFaces && !scanning" x-cloak class="fsu absolute left-3 top-3">
                 <span
                     class="inline-flex items-center gap-1.5 rounded-full bg-green-500/90 px-2.5 py-1 text-xs font-bold text-white shadow backdrop-blur-sm">
-                    <svg class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                    <svg class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
                         <path fill-rule="evenodd"
                             d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z"
                             clip-rule="evenodd" />
@@ -579,7 +632,7 @@
                 </span>
             </div>
 
-            {{-- Multiple faces --}}
+            {{-- Multiple faces badge --}}
             <div x-show="multipleFaces" x-cloak class="fsu absolute left-3 top-3">
                 <span
                     class="inline-flex items-center gap-1.5 rounded-full bg-red-500/90 px-2.5 py-1 text-xs font-bold text-white shadow backdrop-blur-sm">
@@ -587,7 +640,7 @@
                 </span>
             </div>
 
-            {{-- Loading models overlay --}}
+            {{-- Models loading overlay --}}
             <div x-show="modelsLoading"
                 class="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-gray-950/80 backdrop-blur-sm">
                 <svg class="h-8 w-8 animate-spin text-blue-400" xmlns="http://www.w3.org/2000/svg" fill="none"
@@ -610,7 +663,7 @@
                     d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" />
             </svg>
             <p class="text-xs text-blue-700 dark:text-blue-300">
-                Pastikan wajah Anda berada di tengah frame, pencahayaan cukup, dan tidak menggunakan masker atau topi.
+                Pastikan wajah berada di tengah frame, pencahayaan cukup, dan tidak menggunakan masker atau topi.
             </p>
         </div>
     </div>
@@ -622,11 +675,12 @@
         <div
             class="overflow-hidden rounded-2xl border border-green-200 bg-green-50 dark:border-green-800/50 dark:bg-green-950/30">
             <div class="flex items-center gap-4 p-5">
-                {{-- Avatar / photo --}}
+
+                {{-- Avatar --}}
                 <div class="relative shrink-0">
                     <template x-if="matchResult?.siswa?.face_image_path">
                         <img :src="'/storage/' + matchResult.siswa.face_image_path"
-                            :alt="matchResult.siswa.nama_lengkap"
+                            :alt="matchResult.siswa.nama_lengkap ?? matchResult.siswa.nama"
                             class="h-16 w-16 rounded-2xl border-2 border-green-300 object-cover shadow">
                     </template>
                     <template x-if="!matchResult?.siswa?.face_image_path">
@@ -640,10 +694,8 @@
                         </div>
                     </template>
 
-                    {{-- Match ring ripple --}}
                     <div class="match-ripple absolute inset-0 rounded-2xl"></div>
 
-                    {{-- Check badge --}}
                     <div
                         class="absolute -bottom-1.5 -right-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-green-500 shadow ring-2 ring-white dark:ring-gray-900">
                         <svg class="h-3.5 w-3.5 text-white" viewBox="0 0 20 20" fill="currentColor">
@@ -656,13 +708,12 @@
 
                 {{-- Info --}}
                 <div class="min-w-0 flex-1">
-                    <p class="text-base font-bold text-green-800 dark:text-green-200 truncate"
+                    <p class="truncate text-base font-bold text-green-800 dark:text-green-200"
                         x-text="matchResult?.siswa?.nama_lengkap ?? matchResult?.siswa?.nama"></p>
                     <p class="mt-0.5 text-xs text-green-600 dark:text-green-400"
                         x-text="matchResult?.siswa?.nis ? 'NIS: ' + matchResult.siswa.nis : ''"></p>
 
                     <div class="mt-2 flex items-center gap-3">
-                        {{-- Confidence bar --}}
                         <div class="flex-1">
                             <div class="h-1.5 w-full overflow-hidden rounded-full bg-green-200 dark:bg-green-800/60">
                                 <div class="h-full rounded-full bg-green-500 transition-all duration-700"
@@ -683,7 +734,7 @@
             </div>
         </div>
 
-        {{-- Retry --}}
+        {{-- Retry button --}}
         <button type="button" @click="reset()"
             class="flex w-full items-center justify-center gap-2 rounded-xl border border-gray-200 py-2.5 text-sm font-medium text-gray-600 transition hover:bg-gray-50 active:scale-95 dark:border-white/10 dark:text-gray-400 dark:hover:bg-white/5">
             <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
@@ -696,8 +747,6 @@
     </div>
 
     {{-- ── Action buttons (step 1 & 2) ────────────────────────── --}}
-    {{-- These go in the modal footer via extraModalFooterActions, but
-         included here as a reference footer-like bar for the Blade view --}}
     <div x-show="step <= 2" class="flex gap-2 pt-1">
         <button type="button" x-show="!cameraActive" @click="startCamera()"
             :disabled="!modelsLoaded || modelsLoading"
@@ -710,7 +759,7 @@
             Aktifkan Kamera
         </button>
 
-        <button type="button" x-show="cameraActive && !scanning" @click="startVerifikasi()"
+        <button type="button" x-show="cameraActive && !scanning" x-cloak @click="startVerifikasi()"
             :disabled="!faceDetected || multipleFaces"
             class="flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold shadow-sm transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
             :class="faceDetected && !multipleFaces ?
@@ -724,7 +773,7 @@
             Mulai Verifikasi Wajah
         </button>
 
-        <button type="button" x-show="cameraActive" @click="stopCamera()"
+        <button type="button" x-show="cameraActive" x-cloak @click="stopCamera()"
             class="flex items-center justify-center gap-1.5 rounded-xl border border-gray-200 px-3 py-2.5 text-sm font-medium text-gray-600 transition hover:bg-gray-50 active:scale-95 dark:border-white/10 dark:text-gray-400 dark:hover:bg-white/5">
             <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
                 stroke-width="2" stroke="currentColor">
@@ -734,4 +783,5 @@
             Stop
         </button>
     </div>
+
 </div>

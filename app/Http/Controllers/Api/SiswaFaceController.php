@@ -5,43 +5,106 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\SiswaModel;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class SiswaFaceController extends Controller
 {
-    public function registerFace(Request $request, SiswaModel $siswa)
+    public function store(Request $request, SiswaModel $siswa)
     {
-        $validated = $request->validate([
-            'face_descriptor' => ['required', 'array', 'size:128'],
-            'face_descriptor.*' => ['required', 'numeric'],
-            'face_image' => ['nullable', 'image', 'mimes:jpg,jpeg,png', 'max:2048'],
-        ]);
+        $descriptor = $request->input('face_descriptor');
+        $faceImageB64 = $request->input('face_image_b64');
 
-        $faceImagePath = $siswa->face_image;
-
-        if ($request->hasFile('face_image')) {
-            if ($faceImagePath && Storage::disk('public')->exists($faceImagePath)) {
-                Storage::disk('public')->delete($faceImagePath);
-            }
-
-            $faceImagePath = $request->file('face_image')->store('face-siswa', 'public');
+        if (is_string($descriptor)) {
+            $descriptor = json_decode($descriptor, true);
         }
 
+        if (! $this->isValidDescriptor($descriptor)) {
+            return response()->json([
+                'message' => 'Descriptor wajah tidak valid. Silakan scan ulang.',
+            ], 422);
+        }
+
+        if (! $this->isValidBase64Image($faceImageB64)) {
+            return response()->json([
+                'message' => 'Foto wajah tidak valid. Silakan scan ulang.',
+            ], 422);
+        }
+
+        $imagePath = $this->storeFaceImage($siswa, $faceImageB64);
+
         $siswa->update([
-            'face_descriptor' => $validated['face_descriptor'],
-            'face_image' => $faceImagePath,
+            'face_descriptor' => array_map('floatval', $descriptor),
+            'face_image_path' => $imagePath,
             'is_face_registered' => true,
+            'face_registered_by' => Auth::id(),
+            'face_registered_at' => now(),
         ]);
 
         return response()->json([
-            'success' => true,
-            'message' => 'Data wajah siswa berhasil didaftarkan.',
-            'data' => [
-                'id' => $siswa->id,
-                'nama_lengkap' => $siswa->nama_lengkap,
-                'is_face_registered' => $siswa->is_face_registered,
-                'face_image' => $siswa->face_image,
-            ],
+            'message' => 'Data wajah berhasil disimpan.',
+            'face_image_url' => asset('storage/' . $imagePath),
         ]);
+    }
+
+    private function isValidDescriptor(mixed $descriptor): bool
+    {
+        if (! is_array($descriptor) || count($descriptor) !== 128) {
+            return false;
+        }
+
+        foreach ($descriptor as $value) {
+            if (! is_numeric($value)) {
+                return false;
+            }
+
+            $number = (float) $value;
+
+            if (! is_finite($number) || abs($number) > 10) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function isValidBase64Image(?string $image): bool
+    {
+        if (! $image || ! Str::startsWith($image, 'data:image/')) {
+            return false;
+        }
+
+        if (! preg_match('/^data:image\/(jpeg|jpg|png);base64,/', $image)) {
+            return false;
+        }
+
+        $raw = preg_replace('/^data:image\/(jpeg|jpg|png);base64,/', '', $image);
+        $decoded = base64_decode($raw, true);
+
+        if ($decoded === false) {
+            return false;
+        }
+
+        return strlen($decoded) <= 2 * 1024 * 1024;
+    }
+
+    private function storeFaceImage(SiswaModel $siswa, string $image): string
+    {
+        $raw = preg_replace('/^data:image\/(jpeg|jpg|png);base64,/', '', $image);
+        $decoded = base64_decode($raw, true);
+
+        $filename = 'face-enrollment/' . $siswa->getKey() . '_' . now()->timestamp . '.jpg';
+
+        if (
+            $siswa->face_image_path &&
+            Storage::disk('public')->exists($siswa->face_image_path)
+        ) {
+            Storage::disk('public')->delete($siswa->face_image_path);
+        }
+
+        Storage::disk('public')->put($filename, $decoded);
+
+        return $filename;
     }
 }

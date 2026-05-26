@@ -124,30 +124,48 @@ class DashboardController extends Controller
 
     private function getSummaryData(Request $request): array
     {
-        $siswa = $request->user();
+        $user = $request->user();
 
-        if (!$siswa) {
+        if (!$user) {
             Log::warning('getSummaryData: user null saat dipanggil');
             return $this->emptySummary();
         }
 
-        $absensi = AbsensiModel::where('siswa_id', $siswa->id)
+        // ✅ Ambil siswa_id yang benar dari tabel siswas
+        $siswaId = DB::table('siswas')
+            ->where('user_id', $user->id)
+            ->value('id');
+
+        // Fallback ke user->id kalau tidak ketemu di tabel siswas
+        if (!$siswaId) {
+            $siswaId = $user->id;
+            Log::warning('getSummaryData: siswa tidak ditemukan di tabel siswas, fallback ke user id', [
+                'user_id' => $user->id
+            ]);
+        }
+
+        $absensi = AbsensiModel::where('siswa_id', $siswaId) // ← pakai siswaId bukan $user->id
             ->whereYear('tanggal', Carbon::now('Asia/Jakarta')->year)
             ->get();
 
-        $hadir     = $absensi->whereIn('status', ['hadir', 'terlambat'])->count();
+        $hadir     = $absensi->where('status', 'hadir')->count();
         $terlambat = $absensi->where('status', 'terlambat')->count();
-        $izin      = $absensi->whereIn('status', ['izin', 'sakit'])->count();
+        $sakit     = $absensi->where('status', 'sakit')->count();
+        $izin      = $absensi->where('status', 'izin')->count();
         $alpha     = $absensi->where('status', 'alpha')->count();
         $total     = $absensi->count();
 
+        $hadirTotal = $hadir + $terlambat;
+        $izinSakit  = $izin + $sakit;
+
         return [
-            'hadir'            => $hadir,
+            'hadir'            => $hadirTotal,
             'terlambat'        => $terlambat,
-            'izin'             => $izin,
+            'sakit'            => $sakit,
+            'izin'             => $izinSakit,
             'alpha'            => $alpha,
             'total'            => $total,
-            'persentase_hadir' => $total > 0 ? round(($hadir / $total) * 100) : 0,
+            'persentase_hadir' => $total > 0 ? round(($hadirTotal / $total) * 100) : 0,
         ];
     }
 

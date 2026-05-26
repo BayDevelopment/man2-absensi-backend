@@ -9,22 +9,33 @@ use Filament\Actions\RestoreAction;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Auth;
 
 class EditAbsensi extends EditRecord
 {
     protected static string $resource = AbsensiResource::class;
 
-    /**
-     * Cek apakah data absensi masih boleh diedit.
-     * Guru hanya boleh edit hari ini (H+0) dan kemarin (H+1).
-     * Admin bebas edit kapan saja.
-     */
+    protected function mutateFormDataBeforeSave(array $data): array
+    {
+        $data['dicatat_oleh'] = Auth::id();
+
+        if (empty($data['jam_keluar']) && !empty($data['jadwal_id'])) {
+            $data['jam_keluar'] = AbsensiResource::getJamKeluarOtomatis(
+                $data['jadwal_id'],
+                $data['kelas_id'] ?? null,
+                $data['tanggal'] ?? null,
+            );
+        }
+
+        return $data;
+    }
+
     public function mount(int|string $record): void
     {
         parent::mount($record);
 
         // Admin boleh edit kapan saja
-        if (auth()->user()->hasRole('admin')) {
+        if (Auth::user()->hasRole('admin')) {
             return;
         }
 

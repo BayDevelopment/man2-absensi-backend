@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\SiswaFaceController;
 use App\Models\User;
 use Illuminate\Auth\Events\Verified;
 use Illuminate\Http\Request;
@@ -12,6 +13,11 @@ Route::get('/', function () {
 
 Route::get('/login', fn() => redirect()->route('filament.admin.auth.login'))
     ->name('login');
+
+Route::middleware(['web', 'auth'])->group(function () {
+    Route::post('/admin/siswas/{siswa}/register-face', [SiswaFaceController::class, 'store'])
+        ->name('admin.siswas.register-face');
+});
 
 // Email Verification Routes
 Route::get('/email/verify', function () {

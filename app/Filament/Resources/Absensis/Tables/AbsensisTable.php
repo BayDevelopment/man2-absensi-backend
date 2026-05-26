@@ -3,6 +3,11 @@
 namespace App\Filament\Resources\Absensis\Tables;
 
 use App\Exports\AbsensiExport;
+use App\Filament\Resources\Absensis\AbsensiResource;
+use App\Filament\Resources\Absensis\Schemas\AbsensiForm;
+use App\Models\AbsensiModel;
+use App\Models\JamSekolahModel;
+use Carbon\Carbon;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
@@ -13,7 +18,6 @@ use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Grid;
-use Filament\Tables\Columns\BadgeColumn;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Enums\FiltersLayout;
@@ -21,7 +25,8 @@ use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Excel;
 
 class AbsensisTable
@@ -30,7 +35,7 @@ class AbsensisTable
     {
         return $table
             ->columns([
-                TextColumn::make('siswa.nama')
+                TextColumn::make('siswa.nama_lengkap')
                     ->label('Nama Siswa')
                     ->searchable()
                     ->sortable()
@@ -42,7 +47,7 @@ class AbsensisTable
                     ->badge()
                     ->color('info'),
 
-                TextColumn::make('jadwal.nama_pelajaran')
+                TextColumn::make('jadwal.mataPelajaran.nama')
                     ->label('Mata Pelajaran')
                     ->sortable()
                     ->toggleable(),
@@ -54,22 +59,25 @@ class AbsensisTable
 
                 TextColumn::make('jam_masuk')
                     ->label('Jam Masuk')
-                    ->time('H:i')
+                    ->formatStateUsing(fn($state) => $state ? substr($state, 0, 5) : '—')
                     ->toggleable(),
 
                 TextColumn::make('jam_keluar')
                     ->label('Jam Keluar')
-                    ->time('H:i')
+                    ->formatStateUsing(fn($state) => $state ? substr($state, 0, 5) : '—')
                     ->toggleable(),
 
-                BadgeColumn::make('status')
+                // BadgeColumn sudah dihapus di v5 → pakai TextColumn + badge()
+                TextColumn::make('status')
                     ->label('Status')
-                    ->colors([
-                        'success' => 'hadir',
-                        'warning' => 'terlambat',
-                        'info'    => 'izin',
-                        'danger'  => fn($state) => in_array($state, ['sakit', 'alfa']),
-                    ])
+                    ->badge()
+                    ->color(fn(string $state): string => match ($state) {
+                        'hadir'     => 'success',
+                        'terlambat' => 'warning',
+                        'izin'      => 'info',
+                        'sakit', 'alfa' => 'danger',
+                        default     => 'gray',
+                    })
                     ->formatStateUsing(fn($state) => match ($state) {
                         'hadir'     => '✅ Hadir',
                         'terlambat' => '⏰ Terlambat',
@@ -99,7 +107,6 @@ class AbsensisTable
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
 
-            // ── FILTERS ────────────────────────────────────────────────────────
             ->filters([
 
                 Filter::make('periode')
@@ -117,7 +124,7 @@ class AbsensisTable
                             ->placeholder('Semua periode'),
                     ])
                     ->query(function (Builder $query, array $data): Builder {
-                        return $query->when($data['periode'], function ($q, $periode) {
+                        return $query->when($data['periode'] ?? null, function ($q, $periode) {
                             return match ($periode) {
                                 'hari_ini'    => $q->whereDate('tanggal', Carbon::today()),
                                 'minggu_ini'  => $q->whereBetween('tanggal', [
@@ -137,7 +144,7 @@ class AbsensisTable
                         });
                     })
                     ->indicateUsing(function (array $data): ?string {
-                        if (! $data['periode']) return null;
+                        if (empty($data['periode'])) return null;
                         return 'Periode: ' . match ($data['periode']) {
                             'hari_ini'    => 'Hari Ini',
                             'minggu_ini'  => 'Minggu Ini',
@@ -182,11 +189,11 @@ class AbsensisTable
                     ->query(function (Builder $query, array $data): Builder {
                         return $query
                             ->when(
-                                $data['dari_tanggal'],
+                                $data['dari_tanggal'] ?? null,
                                 fn($q, $v) => $q->whereDate('tanggal', '>=', $v)
                             )
                             ->when(
-                                $data['sampai_tanggal'],
+                                $data['sampai_tanggal'] ?? null,
                                 fn($q, $v) => $q->whereDate('tanggal', '<=', $v)
                             );
                     })
@@ -202,38 +209,43 @@ class AbsensisTable
             ])
             ->filtersLayout(FiltersLayout::AboveContent)
             ->filtersFormColumns(3)
+
+            // ── HEADER ACTION: Absen Massal ────────────────────────────────────
+            ->headerActions([
+                Action::make('absen_massal')
+                    ->label('Absen Massal')
+                    ->icon('heroicon-o-user-group')
+                    ->color('primary')
+                    ->form(AbsensiForm::absenMassal())
+                    ->action(fn(array $data) => static::prosesAbsenMassal($data))
+                    ->modalHeading('Absen Massal Siswa')
+                    ->modalSubmitActionLabel('Simpan Absensi')
+                    ->modalWidth('5xl'),
+            ])
+
             ->recordActions([
                 ActionGroup::make([
 
-                    // ── EDIT: hanya tampil jika H+0 atau H+1, atau user adalah admin ──
                     EditAction::make()
                         ->visible(function ($record): bool {
-                            if (auth()->user()->hasRole('admin')) {
-                                return true;
-                            }
+                            if (Auth::user()->hasRole('admin')) return true;
 
-                            $tanggalAbsen = Carbon::parse($record->tanggal)->startOfDay();
-                            $kemarin      = Carbon::yesterday()->startOfDay();
-
-                            // Tampil hanya jika tanggal absen >= kemarin (H+0 atau H+1)
-                            return $tanggalAbsen->gte($kemarin);
+                            return Carbon::parse($record->tanggal)
+                                ->startOfDay()
+                                ->gte(Carbon::yesterday()->startOfDay());
                         })
                         ->tooltip(function ($record): string {
-                            if (auth()->user()->hasRole('admin')) {
-                                return 'Edit data absensi';
-                            }
+                            if (Auth::user()->hasRole('admin')) return 'Edit data absensi';
 
-                            $tanggalAbsen = Carbon::parse($record->tanggal)->startOfDay();
-                            $kemarin      = Carbon::yesterday()->startOfDay();
-
-                            return $tanggalAbsen->gte($kemarin)
+                            return Carbon::parse($record->tanggal)
+                                ->startOfDay()
+                                ->gte(Carbon::yesterday()->startOfDay())
                                 ? 'Edit data absensi'
                                 : 'Tidak dapat diedit — melewati batas H+1';
                         }),
 
-                    // ── DELETE: hanya admin ──────────────────────────────────────────
                     DeleteAction::make()
-                        ->visible(fn(): bool => auth()->user()->hasRole('admin'))
+                        ->visible(fn(): bool => Auth::user()->hasRole('admin'))
                         ->requiresConfirmation()
                         ->modalHeading('Hapus Data Absensi?')
                         ->modalDescription('Data absensi akan dihapus permanen. Tindakan ini tidak dapat dibatalkan.')
@@ -245,7 +257,6 @@ class AbsensisTable
                                 ->success()
                         ),
 
-                    // ── EXPORT PDF ───────────────────────────────────────────────────
                     Action::make('export_pdf')
                         ->label('Export PDF')
                         ->icon('heroicon-o-document-text')
@@ -263,7 +274,6 @@ class AbsensisTable
                             }, 'absensi-' . now()->format('Y-m-d') . '.pdf');
                         }),
 
-                    // ── EXPORT EXCEL ─────────────────────────────────────────────────
                     Action::make('export_excel')
                         ->label('Export Excel')
                         ->icon('heroicon-o-table-cells')
@@ -288,11 +298,11 @@ class AbsensisTable
                     ->button()
                     ->outlined(),
             ])
+
             ->toolbarActions([
-                // ── BULK DELETE: hanya admin ─────────────────────────────────────
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
-                        ->visible(fn(): bool => auth()->user()->hasRole('admin'))
+                        ->visible(fn(): bool => Auth::user()->hasRole('admin'))
                         ->requiresConfirmation()
                         ->modalHeading('Hapus Data Terpilih?')
                         ->modalDescription('Semua data absensi yang dipilih akan dihapus permanen.')
@@ -305,5 +315,109 @@ class AbsensisTable
                         ),
                 ]),
             ]);
+    }
+
+    // =========================================================================
+    // PROSES ABSEN MASSAL
+    // =========================================================================
+    protected static function prosesAbsenMassal(array $data): void
+    {
+        $kelasId         = $data['kelas_id'];
+        $jadwalId        = $data['jadwal_id'];
+        $tanggal         = $data['tanggal'];
+        $jamMasukDefault = $data['jam_masuk_default'] ?? now()->format('H:i');
+        $siswaAbsensi    = $data['siswa_absensi'] ?? [];
+
+        if (!$jadwalId || !$kelasId || !$tanggal) {
+            Notification::make()->title('Data tidak lengkap.')->danger()->send();
+            return;
+        }
+
+        // Jam keluar otomatis dari mapel terakhir hari itu
+        $jamKeluarOtomatis = AbsensiResource::getJamKeluarOtomatis(
+            $jadwalId,
+            $kelasId,
+            $tanggal
+        );
+
+        $jamSekolah = JamSekolahModel::where('aktif', 1)->first();
+        $batasTerlambatLabel = $jamSekolah?->batas_terlambat
+            ? substr($jamSekolah->batas_terlambat, 0, 5)
+            : null;
+
+        $berhasil = 0;
+        $dilewati = 0;
+
+        DB::transaction(function () use (
+            $siswaAbsensi,
+            $jadwalId,
+            $kelasId,
+            $tanggal,
+            $jamMasukDefault,
+            $jamKeluarOtomatis,
+            $batasTerlambatLabel,
+            &$berhasil,
+            &$dilewati
+        ) {
+            foreach ($siswaAbsensi as $item) {
+                $siswaId  = $item['siswa_id'];
+                $status   = $item['status'] ?? 'hadir';
+                $jamMasuk = $item['jam_masuk'] ?? null;
+
+                if (in_array($status, ['hadir', 'terlambat']) && !$jamMasuk) {
+                    $jamMasuk = $jamMasukDefault;
+                }
+
+                $jamKeluar = in_array($status, ['hadir', 'terlambat'])
+                    ? $jamKeluarOtomatis
+                    : null;
+
+                $keterangan = trim($item['keterangan'] ?? '');
+                if ($keterangan === '') {
+                    $keterangan = match ($status) {
+                        'terlambat' => 'Absen terlambat (dicatat guru/admin'
+                            . ($batasTerlambatLabel
+                                ? ', batas ' . $batasTerlambatLabel
+                                . ', masuk ' . substr($jamMasuk ?? '', 0, 5)
+                                : '')
+                            . ')',
+                        'izin'  => 'Tidak hadir dengan izin',
+                        'sakit' => 'Tidak hadir karena sakit',
+                        default => null,
+                    };
+                }
+
+                $existing = AbsensiModel::where('siswa_id', $siswaId)
+                    ->where('jadwal_id', $jadwalId)
+                    ->whereDate('tanggal', $tanggal)
+                    ->first();
+
+                if ($existing?->verified_by_face && in_array($existing->status, ['hadir', 'terlambat'])) {
+                    $dilewati++;
+                    continue;
+                }
+
+                AbsensiModel::updateOrCreate(
+                    ['siswa_id' => $siswaId, 'jadwal_id' => $jadwalId, 'tanggal' => $tanggal],
+                    [
+                        'kelas_id'     => $kelasId,
+                        'status'       => $status,
+                        'jam_masuk'    => in_array($status, ['hadir', 'terlambat']) ? $jamMasuk : null,
+                        'jam_keluar'   => $jamKeluar,
+                        'keterangan'   => $keterangan,
+                        'dicatat_oleh' => Auth::id(),
+                    ]
+                );
+
+                $berhasil++;
+            }
+        });
+
+        $pesan = "✅ Absensi berhasil disimpan untuk {$berhasil} siswa.";
+        if ($dilewati > 0) {
+            $pesan .= " {$dilewati} siswa dilewati (sudah absen via wajah).";
+        }
+
+        Notification::make()->title($pesan)->success()->send();
     }
 }

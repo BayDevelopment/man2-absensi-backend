@@ -44,6 +44,9 @@ class SiswaModel extends Model
         'tanggal_lahir' => 'date',
         'face_registered_at' => 'datetime',
     ];
+    protected $hidden = [
+        'face_descriptor',
+    ];
 
     public function user(): BelongsTo
     {

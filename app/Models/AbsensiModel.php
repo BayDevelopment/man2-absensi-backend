@@ -59,4 +59,12 @@ class AbsensiModel extends Model
     {
         return $this->belongsTo(User::class, 'dicatat_oleh');
     }
+    public function tahunAjaran(): BelongsTo
+    {
+        return $this->belongsTo(TahunAjaranModel::class, 'tahun_ajaran_id');
+    }
+    public function semester(): BelongsTo
+    {
+        return $this->belongsTo(SemesterModel::class, 'semester_id');
+    }
 }

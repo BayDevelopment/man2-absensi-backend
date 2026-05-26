@@ -18,6 +18,8 @@ use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
+use Illuminate\Support\Facades\Blade;
+use Illuminate\Support\Facades\Vite;
 use Illuminate\Support\HtmlString;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 
@@ -57,6 +59,13 @@ class AdminPanelProvider extends PanelProvider
                     Developed by <strong>Bayu Albar Ladici</strong>
                 </div>
             ')
+            )
+            ->renderHook(
+                PanelsRenderHook::HEAD_END,
+                fn(): string => sprintf(
+                    '<script type="module" src="%s"></script>',
+                    Vite::asset('resources/js/filament-face-api.js')
+                ),
             )
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\Filament\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\Filament\Pages')
