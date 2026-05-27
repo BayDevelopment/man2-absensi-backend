@@ -67,4 +67,8 @@ class AbsensiModel extends Model
     {
         return $this->belongsTo(SemesterModel::class, 'semester_id');
     }
+    public function dicatatOleh()
+    {
+        return $this->belongsTo(User::class, 'dicatat_oleh');
+    }
 }

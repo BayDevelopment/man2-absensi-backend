@@ -2,7 +2,6 @@
 
 namespace App\Filament\Resources\Absensis\Tables;
 
-use App\Exports\AbsensiExport;
 use App\Filament\Resources\Absensis\AbsensiResource;
 use App\Filament\Resources\Absensis\Schemas\AbsensiForm;
 use App\Models\AbsensiModel;
@@ -27,7 +26,7 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use Maatwebsite\Excel\Excel;
+use Illuminate\Support\Facades\Response;
 
 class AbsensisTable
 {
@@ -67,16 +66,15 @@ class AbsensisTable
                     ->formatStateUsing(fn($state) => $state ? substr($state, 0, 5) : '—')
                     ->toggleable(),
 
-                // BadgeColumn sudah dihapus di v5 → pakai TextColumn + badge()
                 TextColumn::make('status')
                     ->label('Status')
                     ->badge()
                     ->color(fn(string $state): string => match ($state) {
-                        'hadir'     => 'success',
-                        'terlambat' => 'warning',
-                        'izin'      => 'info',
-                        'sakit', 'alfa' => 'danger',
-                        default     => 'gray',
+                        'hadir'          => 'success',
+                        'terlambat'      => 'warning',
+                        'izin'           => 'info',
+                        'sakit', 'alfa'  => 'danger',
+                        default          => 'gray',
                     })
                     ->formatStateUsing(fn($state) => match ($state) {
                         'hadir'     => '✅ Hadir',
@@ -210,7 +208,6 @@ class AbsensisTable
             ->filtersLayout(FiltersLayout::AboveContent)
             ->filtersFormColumns(3)
 
-            // ── HEADER ACTION: Absen Massal ────────────────────────────────────
             ->headerActions([
                 Action::make('absen_massal')
                     ->label('Absen Massal')
@@ -221,22 +218,76 @@ class AbsensisTable
                     ->modalHeading('Absen Massal Siswa')
                     ->modalSubmitActionLabel('Simpan Absensi')
                     ->modalWidth('5xl'),
+
+                Action::make('export_pdf')
+                    ->label('Export PDF')
+                    ->icon('heroicon-o-document-text')
+                    ->color('danger')
+                    ->action(function ($livewire) {
+                        $records = $livewire->getFilteredTableQuery()->with([
+                            'siswa',
+                            'kelas',
+                            'jadwal.mataPelajaran',
+                            'dicatatOleh',
+                        ])->get();
+
+                        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView(
+                            'exports.absensi-pdf',
+                            compact('records')
+                        )->setPaper('a4', 'landscape');
+
+                        return Response::streamDownload(function () use ($pdf) {
+                            echo $pdf->output();
+                        }, 'absensi-' . Carbon::now()->format('Y-m-d') . '.pdf');
+                    }),
+
+                Action::make('export_excel')
+                    ->label('Export Excel')
+                    ->icon('heroicon-o-table-cells')
+                    ->color('success')
+                    ->action(function ($livewire) {
+                        $records = $livewire->getFilteredTableQuery()->with([
+                            'siswa',
+                            'kelas',
+                            'jadwal',
+                            'dicatatOleh',
+                        ])->get();
+
+                        return \Maatwebsite\Excel\Facades\Excel::download(
+                            new \App\Exports\AbsensiExport($records),
+                            'absensi-' . Carbon::now()->format('Y-m-d') . '.xlsx'
+                        );
+                    }),
             ])
 
             ->recordActions([
                 ActionGroup::make([
 
+                    Action::make('lihat_detail')
+                        ->label('Lihat Detail')
+                        ->icon('heroicon-o-eye')
+                        ->color('info')
+                        ->modalHeading(
+                            fn(AbsensiModel $record): string =>
+                            'Detail Absensi — ' . ($record->siswa?->nama_lengkap ?? 'Siswa')
+                        )
+                        ->modalContent(fn(AbsensiModel $record) => view(
+                            'filament.modals.absensi-detail',
+                            ['record' => $record]
+                        ))
+                        ->modalSubmitAction(false)
+                        ->modalCancelActionLabel('Tutup')
+                        ->modalWidth('lg'),
+
                     EditAction::make()
                         ->visible(function ($record): bool {
                             if (Auth::user()->hasRole('admin')) return true;
-
                             return Carbon::parse($record->tanggal)
                                 ->startOfDay()
                                 ->gte(Carbon::yesterday()->startOfDay());
                         })
                         ->tooltip(function ($record): string {
                             if (Auth::user()->hasRole('admin')) return 'Edit data absensi';
-
                             return Carbon::parse($record->tanggal)
                                 ->startOfDay()
                                 ->gte(Carbon::yesterday()->startOfDay())
@@ -256,42 +307,6 @@ class AbsensisTable
                                 ->body('Data absensi berhasil dihapus.')
                                 ->success()
                         ),
-
-                    Action::make('export_pdf')
-                        ->label('Export PDF')
-                        ->icon('heroicon-o-document-text')
-                        ->color('danger')
-                        ->action(function ($livewire) {
-                            $records = $livewire->getFilteredTableQuery()->with([
-                                'siswa',
-                                'kelas',
-                                'jadwal',
-                                'dicatatOleh',
-                            ])->get();
-
-                            return response()->streamDownload(function () use ($records) {
-                                echo view('exports.absensi-pdf', compact('records'))->render();
-                            }, 'absensi-' . now()->format('Y-m-d') . '.pdf');
-                        }),
-
-                    Action::make('export_excel')
-                        ->label('Export Excel')
-                        ->icon('heroicon-o-table-cells')
-                        ->color('success')
-                        ->action(function ($livewire) {
-                            $records = $livewire->getFilteredTableQuery()->with([
-                                'siswa',
-                                'kelas',
-                                'jadwal',
-                                'dicatatOleh',
-                            ])->get();
-
-                            return Excel::download(
-                                new AbsensiExport($records),
-                                'absensi-' . now()->format('Y-m-d') . '.xlsx'
-                            );
-                        }),
-
                 ])
                     ->label('Aksi')
                     ->icon('heroicon-o-ellipsis-vertical')
@@ -325,7 +340,7 @@ class AbsensisTable
         $kelasId         = $data['kelas_id'];
         $jadwalId        = $data['jadwal_id'];
         $tanggal         = $data['tanggal'];
-        $jamMasukDefault = $data['jam_masuk_default'] ?? now()->format('H:i');
+        $jamMasukDefault = $data['jam_masuk_default'] ?? Carbon::now()->format('H:i');
         $siswaAbsensi    = $data['siswa_absensi'] ?? [];
 
         if (!$jadwalId || !$kelasId || !$tanggal) {
@@ -333,7 +348,6 @@ class AbsensisTable
             return;
         }
 
-        // Jam keluar otomatis dari mapel terakhir hari itu
         $jamKeluarOtomatis = AbsensiResource::getJamKeluarOtomatis(
             $jadwalId,
             $kelasId,
