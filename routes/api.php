@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\AttendanceController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\JadwalController;
+use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\RiwayatController;
 use App\Http\Controllers\Api\SettingController;
@@ -14,12 +15,13 @@ use Illuminate\Support\Facades\Route;
 
 Route::post('/login',  [AuthController::class, 'login']);
 Route::get('/login',  [AuthController::class, 'index']);
-
+Route::post('/verify-otp', [AuthController::class, 'verifyOtp']);
 
 // Protected routes (butuh token)
 Route::middleware('auth:sanctum', 'siswa')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me',      [AuthController::class, 'me']);
+    Route::get('/notifications', [NotificationController::class, 'index']);
 
     // Dashboard
     Route::get('/dashboard', [DashboardController::class, 'index']);

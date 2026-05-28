@@ -132,31 +132,31 @@ class SettingController extends Controller
 
     public function updateKeamanan(Request $request): JsonResponse
     {
-        $validator = Validator::make($request->all(), [
+        $request->validate([
             'two_factor'      => ['required', 'boolean'],
             'notif_login'     => ['required', 'boolean'],
             'logout_otomatis' => ['required', 'boolean'],
         ]);
 
-        if ($validator->fails()) {
-            return response()->json([
-                'status'  => 'error',
-                'message' => 'Validasi gagal',
-                'errors'  => $validator->errors(),
-            ], 422);
-        }
-
-        UserSecuritySetting::updateOrCreate(
+        $security = UserSecuritySetting::updateOrCreate(
             ['user_id' => Auth::id()],
-            $validator->validated()
+            [
+                'two_factor'      => $request->two_factor,
+                'notif_login'     => $request->notif_login,
+                'logout_otomatis' => $request->logout_otomatis,
+            ]
         );
 
         return response()->json([
-            'status' => 'success',
-            'message' => 'Keamanan berhasil disimpan',
+            'success' => true,
+            'message' => 'Pengaturan keamanan disimpan',
+            'data'    => [
+                'two_factor'      => (bool) $security->two_factor,
+                'notif_login'     => (bool) $security->notif_login,
+                'logout_otomatis' => (bool) $security->logout_otomatis,
+            ],
         ]);
     }
-
     public function updateTampilan(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
