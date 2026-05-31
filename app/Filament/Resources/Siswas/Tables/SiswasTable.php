@@ -11,7 +11,6 @@ use Filament\Actions\EditAction;
 use Filament\Notifications\Notification;
 use Filament\Tables\Columns\BadgeColumn;
 use Filament\Tables\Columns\IconColumn;
-use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
@@ -42,7 +41,7 @@ class SiswasTable
                 BadgeColumn::make('jenis_kelamin')
                     ->label('JK')
                     ->colors([
-                        'primary' => 'L',
+                        'primary'   => 'L',
                         'secondary' => 'P',
                     ])
                     ->getStateUsing(fn($record) => $record->jenis_kelamin === 'L' ? 'Laki-laki' : 'Perempuan')
@@ -52,11 +51,19 @@ class SiswasTable
                     ->label('No. HP')
                     ->sortable(),
 
-                ImageColumn::make('foto')
+                TextColumn::make('foto')
                     ->label('Foto')
-                    ->circular()
-                    ->disk('public')
-                    ->toggleable(), // bisa hide/show
+                    ->getStateUsing(function ($record) {
+                        if ($record && filled($record->foto)) {
+                            $url = asset('storage/' . $record->foto);
+                            return '<img src="' . e($url) . '" 
+                                        style="width:40px;height:40px;border-radius:50%;object-fit:cover;" 
+                                        alt="foto" />';
+                        }
+                        return '<span style="color:red;font-size:12px;font-weight:500;">Belum ada foto</span>';
+                    })
+                    ->html()
+                    ->toggleable(),
 
                 IconColumn::make('is_face_registered')
                     ->label('Face Terdaftar')

@@ -58,23 +58,38 @@ class AbsensisTable
 
                 TextColumn::make('jam_masuk')
                     ->label('Jam Masuk')
-                    ->formatStateUsing(fn($state) => $state ? substr($state, 0, 5) : '—')
+                    ->formatStateUsing(function ($state, $record) {
+                        if (in_array($record->status, ['izin', 'sakit', 'alfa'])) {
+                            return match ($record->status) {
+                                'izin'  => '📝 Izin',
+                                'sakit' => '🏥 Sakit',
+                                'alfa'  => '❌ Tidak Hadir',
+                                default => '—',
+                            };
+                        }
+                        return $state ? substr($state, 0, 5) : '—';
+                    })
                     ->toggleable(),
 
                 TextColumn::make('jam_keluar')
                     ->label('Jam Keluar')
-                    ->formatStateUsing(fn($state) => $state ? substr($state, 0, 5) : '—')
+                    ->formatStateUsing(function ($state, $record) {
+                        if (in_array($record->status, ['izin', 'sakit', 'alfa'])) {
+                            return '—';
+                        }
+                        return $state ? substr($state, 0, 5) : '—';
+                    })
                     ->toggleable(),
 
                 TextColumn::make('status')
                     ->label('Status')
                     ->badge()
                     ->color(fn(string $state): string => match ($state) {
-                        'hadir'          => 'success',
-                        'terlambat'      => 'warning',
-                        'izin'           => 'info',
-                        'sakit', 'alfa'  => 'danger',
-                        default          => 'gray',
+                        'hadir'         => 'success',
+                        'terlambat'     => 'warning',
+                        'izin'          => 'info',
+                        'sakit', 'alfa' => 'danger',
+                        default         => 'gray',
                     })
                     ->formatStateUsing(fn($state) => match ($state) {
                         'hadir'     => '✅ Hadir',
@@ -279,12 +294,16 @@ class AbsensisTable
                         ->modalCancelActionLabel('Tutup')
                         ->modalWidth('lg'),
 
+                    // Admin: edit bebas | Guru: edit H+1 saja
                     EditAction::make()
                         ->visible(function ($record): bool {
                             if (Auth::user()->hasRole('admin')) return true;
-                            return Carbon::parse($record->tanggal)
-                                ->startOfDay()
-                                ->gte(Carbon::yesterday()->startOfDay());
+                            if (Auth::user()->hasRole('guru')) {
+                                return Carbon::parse($record->tanggal)
+                                    ->startOfDay()
+                                    ->gte(Carbon::yesterday()->startOfDay());
+                            }
+                            return false;
                         })
                         ->tooltip(function ($record): string {
                             if (Auth::user()->hasRole('admin')) return 'Edit data absensi';
@@ -295,6 +314,7 @@ class AbsensisTable
                                 : 'Tidak dapat diedit — melewati batas H+1';
                         }),
 
+                    // Hanya admin yang bisa hapus
                     DeleteAction::make()
                         ->visible(fn(): bool => Auth::user()->hasRole('admin'))
                         ->requiresConfirmation()
@@ -316,6 +336,7 @@ class AbsensisTable
 
             ->toolbarActions([
                 BulkActionGroup::make([
+                    // Hanya admin yang bisa bulk delete
                     DeleteBulkAction::make()
                         ->visible(fn(): bool => Auth::user()->hasRole('admin'))
                         ->requiresConfirmation()
@@ -343,7 +364,7 @@ class AbsensisTable
         $jamMasukDefault = $data['jam_masuk_default'] ?? Carbon::now()->format('H:i');
         $siswaAbsensi    = $data['siswa_absensi'] ?? [];
 
-        if (!$jadwalId || !$kelasId || !$tanggal) {
+        if (! $jadwalId || ! $kelasId || ! $tanggal) {
             Notification::make()->title('Data tidak lengkap.')->danger()->send();
             return;
         }
@@ -354,7 +375,7 @@ class AbsensisTable
             $tanggal
         );
 
-        $jamSekolah = JamSekolahModel::where('aktif', 1)->first();
+        $jamSekolah          = JamSekolahModel::query()->where('aktif', 1)->first();
         $batasTerlambatLabel = $jamSekolah?->batas_terlambat
             ? substr($jamSekolah->batas_terlambat, 0, 5)
             : null;
@@ -378,7 +399,7 @@ class AbsensisTable
                 $status   = $item['status'] ?? 'hadir';
                 $jamMasuk = $item['jam_masuk'] ?? null;
 
-                if (in_array($status, ['hadir', 'terlambat']) && !$jamMasuk) {
+                if (in_array($status, ['hadir', 'terlambat']) && ! $jamMasuk) {
                     $jamMasuk = $jamMasukDefault;
                 }
 
@@ -401,7 +422,8 @@ class AbsensisTable
                     };
                 }
 
-                $existing = AbsensiModel::where('siswa_id', $siswaId)
+                $existing = AbsensiModel::query()
+                    ->where('siswa_id', $siswaId)
                     ->where('jadwal_id', $jadwalId)
                     ->whereDate('tanggal', $tanggal)
                     ->first();
@@ -411,8 +433,12 @@ class AbsensisTable
                     continue;
                 }
 
-                AbsensiModel::updateOrCreate(
-                    ['siswa_id' => $siswaId, 'jadwal_id' => $jadwalId, 'tanggal' => $tanggal],
+                AbsensiModel::query()->updateOrCreate(
+                    [
+                        'siswa_id'  => $siswaId,
+                        'jadwal_id' => $jadwalId,
+                        'tanggal'   => $tanggal,
+                    ],
                     [
                         'kelas_id'     => $kelasId,
                         'status'       => $status,

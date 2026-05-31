@@ -3,9 +3,12 @@
 namespace App\Filament\Resources\Appearances\Tables;
 
 use App\Models\AppearanceModel;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Notifications\Notification;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
@@ -44,18 +47,6 @@ class AppearancesTable
                     })
                     ->alignCenter(),
 
-                TextColumn::make('ukuran_teks')
-                    ->label('Ukuran Teks')
-                    ->formatStateUsing(fn($state) => AppearanceModel::UKURAN_TEKS[$state] ?? $state)
-                    ->badge()
-                    ->color(fn($state) => match ($state) {
-                        'small'  => 'gray',
-                        'normal' => 'success',
-                        'large'  => 'warning',
-                        default  => 'gray',
-                    })
-                    ->alignCenter(),
-
                 TextColumn::make('updated_at')
                     ->label('Diperbarui')
                     ->dateTime('d M Y, H:i')
@@ -76,7 +67,24 @@ class AppearancesTable
                     ->options(AppearanceModel::UKURAN_TEKS),
             ])
             ->recordActions([
-                EditAction::make(),
+                ActionGroup::make([
+                    EditAction::make(),
+
+                    DeleteAction::make()
+                        ->requiresConfirmation()
+                        ->modalHeading('Hapus data?')
+                        ->modalDescription('Data akan dipindahkan ke trash.')
+                        ->successNotification(
+                            Notification::make()
+                                ->title('Berhasil')
+                                ->body('Data berhasil dihapus')
+                                ->success()
+                        ),
+                ])
+                    ->label('Aksi')
+                    ->icon('heroicon-o-ellipsis-vertical')
+                    ->button()
+                    ->outlined(),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

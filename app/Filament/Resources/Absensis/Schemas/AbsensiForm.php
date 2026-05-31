@@ -157,7 +157,6 @@ class AbsensiForm
                                 ->nullable()
                                 ->seconds(false)
                                 ->native(false)
-                                ->after('jam_masuk')
                                 ->helperText('Kosongkan untuk otomatis terisi dari jam selesai mapel terakhir.')
                                 ->visible(fn(Get $get) => in_array($get('status'), ['hadir', 'terlambat']))
                                 ->validationMessages([
@@ -212,7 +211,11 @@ class AbsensiForm
 
                         Select::make('kelas_id')
                             ->label('Kelas')
-                            ->options(KelasModel::orderBy('nama_kelas')->pluck('nama_kelas', 'id'))
+                            ->options(function () {
+                                /** @var \Illuminate\Database\Eloquent\Builder<\App\Models\KelasModel> $query */
+                                $query = KelasModel::query();
+                                return $query->orderBy('nama_kelas')->pluck('nama_kelas', 'id');
+                            })
                             ->required()
                             ->native(false)
                             ->live()
@@ -225,9 +228,10 @@ class AbsensiForm
                             ->label('Jadwal / Mata Pelajaran')
                             ->options(function (Get $get) {
                                 $kelasId = $get('kelas_id');
-                                if (!$kelasId) return [];
+                                if (! $kelasId) return [];
 
-                                return \App\Models\JadwalModel::with('mataPelajaran')
+                                return JadwalModel::query()
+                                    ->with('mataPelajaran')
                                     ->where('kelas_id', $kelasId)
                                     ->whereNotNull('mata_pelajaran_id')
                                     ->where(fn($q) => $q->where('is_break', false)->orWhereNull('is_break'))
@@ -286,7 +290,7 @@ class AbsensiForm
                             ->seconds(false)
                             ->native(false)
                             ->default(function () {
-                                $js = JamSekolahModel::where('aktif', 1)->first();
+                                $js = JamSekolahModel::query()->where('aktif', 1)->first();
                                 return $js?->jam_masuk ? substr($js->jam_masuk, 0, 5) : '07:00';
                             })
                             ->required()
@@ -307,7 +311,7 @@ class AbsensiForm
                                 ->label('Siswa')
                                 ->content(
                                     fn(Get $get): string =>
-                                    SiswaModel::find($get('siswa_id'))?->nama_lengkap ?? '—'
+                                    SiswaModel::query()->find($get('siswa_id'))?->nama_lengkap ?? '—'
                                 ),
 
                             Select::make('status')
@@ -353,12 +357,13 @@ class AbsensiForm
         $statusDefault   = $get('status_default') ?? 'hadir';
         $jamMasukDefault = $get('jam_masuk_default') ?? '07:00';
 
-        if (!$kelasId || !$jadwalId) {
+        if (! $kelasId || ! $jadwalId) {
             $set('siswa_absensi', []);
             return;
         }
 
-        $siswas = SiswaModel::where('kelas_id', $kelasId)
+        $siswas = SiswaModel::query()
+            ->where('kelas_id', $kelasId)
             ->where('is_active', true)
             ->orderBy('nama_lengkap')
             ->get();
@@ -370,7 +375,8 @@ class AbsensiForm
             $jamMasukDefault
         ) {
             $existing = $tanggal
-                ? AbsensiModel::where('siswa_id', $siswa->id)
+                ? AbsensiModel::query()
+                ->where('siswa_id', $siswa->id)
                 ->where('jadwal_id', $jadwalId)
                 ->whereDate('tanggal', $tanggal)
                 ->first()

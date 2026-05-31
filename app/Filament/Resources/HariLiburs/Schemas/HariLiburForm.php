@@ -12,6 +12,7 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
+use Illuminate\Support\Facades\Auth;
 
 class HariLiburForm
 {
@@ -94,12 +95,11 @@ class HariLiburForm
                         Textarea::make('keterangan')
                             ->label('Keterangan Tambahan')
                             ->placeholder('Tambahkan catatan jika diperlukan.')
-                            ->nullable()
                             ->rows(4)
                             ->columnSpanFull(),
 
                         Hidden::make('dibuat_oleh')
-                            ->default(fn() => auth()->id()),
+                            ->default(fn() => Auth::id()),
                     ]),
             ]);
     }

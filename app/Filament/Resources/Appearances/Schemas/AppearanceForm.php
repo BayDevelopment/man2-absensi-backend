@@ -71,19 +71,6 @@ class AppearanceForm
                             ->native(false)
                             ->prefixIcon('heroicon-o-language'),
 
-                        Select::make('ukuran_teks')
-                            ->label('Ukuran Teks')
-                            ->options(AppearanceModel::UKURAN_TEKS)
-                            ->default('normal')
-                            ->required()
-                            ->in(array_keys(AppearanceModel::UKURAN_TEKS))
-                            ->validationMessages([
-                                'required' => 'Ukuran teks wajib dipilih.',
-                                'in'       => 'Ukuran teks yang dipilih tidak valid.',
-                            ])
-                            ->native(false)
-                            ->prefixIcon('heroicon-o-magnifying-glass'),
-
                     ]),
             ]);
     }

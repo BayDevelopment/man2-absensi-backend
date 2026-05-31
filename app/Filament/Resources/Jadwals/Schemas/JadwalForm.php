@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Jadwals\Schemas;
 use App\Models\GuruModel;
 use App\Models\JadwalModel;
 use App\Models\KelasModel;
+use App\Models\MataPelajaran;
 use App\Models\SemesterModel;
 use App\Models\TahunAjaranModel;
 use Filament\Schemas\Schema;
@@ -213,10 +214,10 @@ class JadwalForm
                             ->native(false)
                             ->hidden(fn(Get $get) => $get('is_break'))
                             ->disabled(
-                                static fn(): bool => !\App\Models\MataPelajaran::query()->exists()
+                                static fn(): bool => !MataPelajaran::query()->exists()
                             )
                             ->helperText(
-                                static fn(): string => \App\Models\MataPelajaran::query()->exists()
+                                static fn(): string => MataPelajaran::query()->exists()
                                     ? 'Pilih mata pelajaran untuk slot ini.'
                                     : '⚠️ Belum ada data mata pelajaran. Tambahkan mata pelajaran terlebih dahulu.'
                             )

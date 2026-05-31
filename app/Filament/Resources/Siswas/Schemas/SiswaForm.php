@@ -3,7 +3,6 @@
 namespace App\Filament\Resources\Siswas\Schemas;
 
 use App\Models\User;
-use App\Models\Kelas;
 use App\Models\KelasModel;
 use App\Models\SiswaModel;
 use Filament\Forms\Components\FileUpload;
@@ -35,8 +34,10 @@ class SiswaForm
                             ->preload()
                             ->live()
                             ->options(function (?SiswaModel $record) {
-                                // 1. Ambil user_id yang sudah ada di tabel siswas
-                                $userSudahTerdaftar = SiswaModel::query()
+                                /** @var \Illuminate\Database\Eloquent\Builder<SiswaModel> $siswaQuery */
+                                $siswaQuery = SiswaModel::query();
+
+                                $userSudahTerdaftar = $siswaQuery
                                     ->whereNotNull('user_id')
                                     ->when(
                                         $record?->user_id,
@@ -46,19 +47,16 @@ class SiswaForm
                                     ->toArray();
 
                                 return User::query()
-                                    // 2. Filter berdasarkan role siswa (kolom text atau Spatie)
                                     ->where(function ($query) {
                                         $query->where('role', 'siswa')
                                             ->orWhereHas('roles', function ($q) {
                                                 $q->where('name', 'siswa');
                                             });
                                     })
-                                    // 3. Pastikan user belum terdaftar di tabel siswas
                                     ->whereNotIn('id', $userSudahTerdaftar)
                                     ->orderBy('name')
                                     ->get()
                                     ->mapWithKeys(function ($user) {
-                                        // Dropdown mengambil dari kolom 'nisn' milik tabel users untuk info pencarian
                                         $nisnTampil = $user->nisn ?? 'Tanpa NISN';
                                         return [
                                             $user->id => "{$nisnTampil} - {$user->name}",
@@ -70,7 +68,6 @@ class SiswaForm
                                 if (! $record?->user) {
                                     return;
                                 }
-                                // Saat edit, ambil data 'nis' dari tabel siswa atau fallback ke 'nisn' milik user
                                 $set('nis', $record->nis ?? $record->user->nisn);
                                 $set('email', $record->user->email);
                                 $set('nama_lengkap', $record->nama_lengkap ?? $record->user->name);
@@ -84,8 +81,6 @@ class SiswaForm
                                 }
 
                                 $user = User::query()->find($state);
-
-                                // Lempar data 'nisn' milik tabel USERS ke komponen form bernama 'nis'
                                 $set('nis', $user?->nisn);
                                 $set('email', $user?->email);
                                 $set('nama_lengkap', $user?->name);
@@ -96,17 +91,17 @@ class SiswaForm
                                 'required' => 'Siswa wajib dipilih.',
                             ]),
 
-                        TextInput::make('nis') // 💡 Menggunakan nama field 'nis' sesuai kolom tabel siswas
+                        TextInput::make('nis')
                             ->label('NISN')
                             ->required()
                             ->disabled()
-                            ->dehydrated() // Tetap disimpan ke database saat disubmit
+                            ->dehydrated()
                             ->numeric()
                             ->minLength(10)
                             ->maxLength(10)
                             ->unique(
                                 table: SiswaModel::class,
-                                column: 'nis', // 💡 Diubah ke 'nis' karena di tabel siswas kolomnya bernama 'nis'
+                                column: 'nis',
                                 ignoreRecord: true,
                             )
                             ->helperText('NISN otomatis diambil dari data user.')
@@ -132,13 +127,11 @@ class SiswaForm
                                 'email'    => 'Format email tidak valid.',
                             ]),
 
-
-
                         TextInput::make('nama_lengkap')
                             ->label('Nama Lengkap')
                             ->required()
                             ->maxLength(255)
-                            ->regex('/^[\pL\s\-\.]+$/u')          // hanya huruf, spasi, titik, strip
+                            ->regex('/^[\pL\s\-\.]+$/u')
                             ->helperText('Masukkan nama lengkap sesuai Kartu Pelajar.')
                             ->validationAttribute('nama lengkap')
                             ->validationMessages([
@@ -148,6 +141,7 @@ class SiswaForm
                             ]),
 
                     ]),
+
                     Select::make('jenis_kelamin')
                         ->label('Jenis Kelamin')
                         ->options([
@@ -168,8 +162,7 @@ class SiswaForm
                         ->label('No. HP')
                         ->tel()
                         ->maxLength(15)
-                        ->nullable()
-                        ->regex('/^(\+62|08)[0-9]{7,12}$/')      // format Indonesia
+                        ->regex('/^(\+62|08)[0-9]{7,12}$/')
                         ->helperText('Format: 08xxxxxxxx atau +62xxxxxxxx, tanpa spasi.')
                         ->validationAttribute('nomor HP')
                         ->validationMessages([
@@ -229,7 +222,9 @@ class SiswaForm
                         ->label('Face Descriptor')
                         ->content(
                             static fn($record): string => $record?->face_descriptor
-                                ? json_encode($record->face_descriptor)
+                                ? (is_array($record->face_descriptor)
+                                    ? json_encode($record->face_descriptor)
+                                    : $record->face_descriptor)
                                 : 'Belum terdaftar'
                         )
                         ->helperText('Informasi teknis face recognition, tidak bisa diubah secara manual.'),

@@ -52,14 +52,14 @@ class GuruForm
                             ->live()
                             ->afterStateUpdated(function (Get $get, Set $set) {
                                 $userId = $get('user_id');
-                                $email = User::find($userId)?->email;
+                                $email = User::query()->find($userId)?->email;
                                 $set('email', $email ?? '');
                             })
                             ->disabled(
-                                static fn(): bool => !User::query()
+                                static fn(?Model $record): bool => $record === null && !User::query()
                                     ->where('role', 'guru')
                                     ->whereNotNull('email_verified_at')
-                                    ->whereDoesntHave('guru') // ✅ cek apakah ada yang belum terhubung
+                                    ->whereDoesntHave('guru')
                                     ->exists()
                             )
                             ->dehydrated(true)

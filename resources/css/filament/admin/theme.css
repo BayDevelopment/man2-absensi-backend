@@ -1,0 +1,70 @@
+@import "../../../../vendor/filament/filament/resources/css/theme.css";
+
+@source '../../../../app/Filament/**/*';
+@source '../../../../resources/views/filament/**/*';
+/* Timeline dot untuk navigation items */
+.fi-sidebar-nav .fi-sidebar-group-items .fi-sidebar-item {
+    position: relative;
+    padding-left: 20px !important;
+}
+
+/* Garis vertikal */
+.fi-sidebar-nav .fi-sidebar-group-items .fi-sidebar-item::before {
+    content: "";
+    position: absolute;
+    left: 8px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: #e2e8f0;
+}
+
+/* Titik */
+.fi-sidebar-nav .fi-sidebar-group-items .fi-sidebar-item::after {
+    content: "";
+    position: absolute;
+    left: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #e2e8f0;
+    border: 2px solid #fff;
+    z-index: 1;
+}
+
+/* Titik aktif */
+.fi-sidebar-nav .fi-sidebar-group-items .fi-sidebar-item.fi-active::after {
+    background: #f97316; /* warna orange sesuai theme kamu */
+    border-color: #fff;
+    box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.2);
+}
+
+/* Garis item pertama — potong bagian atas */
+.fi-sidebar-nav .fi-sidebar-group-items .fi-sidebar-item:first-child::before {
+    top: 50%;
+}
+
+/* Garis item terakhir — potong bagian bawah */
+.fi-sidebar-nav .fi-sidebar-group-items .fi-sidebar-item:last-child::before {
+    bottom: 50%;
+}
+/* Perbaiki dropdown filter ChartWidget */
+.fi-wi-chart .fi-select-input {
+    min-width: 140px;
+    height: 36px;
+    padding: 0 12px;
+    border-radius: 8px;
+    font-size: 0.875rem;
+}
+
+.fi-wi-chart select {
+    min-width: 140px;
+    width: auto;
+    height: 36px;
+    padding: 4px 32px 4px 12px;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    appearance: auto;
+}

@@ -2,6 +2,8 @@
 
 namespace App\Providers\Filament;
 
+use App\Filament\Pages\Auth\CustomRequestPasswordReset;
+use App\Filament\Pages\Auth\CustomResetPassword;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -32,9 +34,14 @@ class AdminPanelProvider extends PanelProvider
             ->id('admin')
             ->path('admin')
             ->login()
+            ->passwordReset(
+                requestAction: CustomRequestPasswordReset::class,
+                resetAction: CustomResetPassword::class,
+            )
             ->colors([
                 'primary' => Color::Amber,
             ])
+            ->viteTheme('resources/css/filament/admin/theme.css')
             ->font('poppins')
             ->brandName(new HtmlString('
                 <span style="font-style: italic; font-weight: 400; color: #f97316;">

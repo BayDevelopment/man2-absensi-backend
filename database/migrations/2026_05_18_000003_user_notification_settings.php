@@ -17,7 +17,6 @@ return new class extends Migration
             $table->boolean('kehadiran')->default(true);
             $table->boolean('pengumuman')->default(true);
             $table->boolean('jadwal')->default(false);
-            $table->boolean('nilai')->default(true);
             $table->timestamps();
         });
     }

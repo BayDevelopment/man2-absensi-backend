@@ -38,12 +38,6 @@ class NotificationsTable
                     ->label('Jadwal')
                     ->boolean()
                     ->alignCenter(),
-
-                IconColumn::make('nilai')
-                    ->label('Nilai')
-                    ->boolean()
-                    ->alignCenter(),
-
                 TextColumn::make('updated_at')
                     ->label('Diperbarui')
                     ->dateTime('d M Y, H:i')

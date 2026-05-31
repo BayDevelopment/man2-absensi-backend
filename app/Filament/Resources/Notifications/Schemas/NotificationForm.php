@@ -28,7 +28,7 @@ class NotificationForm
                             ->preload()
                             ->required()
                             ->unique(
-                                table: 'user_notification_settings', // sesuaikan nama tabel
+                                table: 'user_notification_settings',
                                 column: 'user_id',
                                 ignoreRecord: true,
                             )
@@ -67,14 +67,6 @@ class NotificationForm
                             ->offIcon('heroicon-m-x-mark')
                             ->onColor('success')
                             ->default(false),
-
-                        Toggle::make('nilai')
-                            ->label('Notifikasi Nilai')
-                            ->helperText('Notifikasi saat nilai baru diinput.')
-                            ->onIcon('heroicon-m-check')
-                            ->offIcon('heroicon-m-x-mark')
-                            ->onColor('success')
-                            ->default(true),
 
                     ]),
             ]);

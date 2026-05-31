@@ -76,7 +76,6 @@ class UserForm
 
                         TextInput::make('nisn')
                             ->label('NISN')
-                            ->nullable(fn(Get $get) => $get('role') !== 'siswa')
                             ->required(fn(Get $get) => $get('role') === 'siswa')
                             ->numeric()
                             ->length(10)
